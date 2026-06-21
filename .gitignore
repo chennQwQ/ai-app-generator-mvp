@@ -38,3 +38,6 @@ Thumbs.db
 
 # Local brainstorming artifacts
 .superpowers/
+
+# Local implementation worktrees
+.worktrees/

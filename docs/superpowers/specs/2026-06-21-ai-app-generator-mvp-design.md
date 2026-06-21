@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build the first slice of the AI application generation platform shown in the reference video: a Web Studio where a user describes an app, the backend starts a local code Agent in an isolated project workspace, logs stream back in real time, generated files can be inspected, and the app can be previewed through a local dev server.
+Build the first slice of the AI application generation platform shown in the reference video: a Web Studio where a user describes an app, the backend starts the open-source OpenCode Agent in an isolated project workspace, logs stream back in real time, generated files can be inspected, and the app can be previewed through a local dev server.
 
 This MVP intentionally does not include the full ApiFlow Java/Groovy workflow engine, visual workflow authoring, template marketplace, multi-user billing, or production deployment. Those are later phases after the generation loop is reliable.
 
@@ -54,7 +54,7 @@ flowchart LR
   Studio <--> WS["WebSocket Gateway"]
   API --> DB["SQLite"]
   API --> Runner["Agent Runner"]
-  Runner --> Agent["Codex or Claude CLI"]
+  Runner --> Agent["OpenCode CLI"]
   Agent --> Workspace["Project Workspace"]
   API --> Preview["Preview Manager"]
   Preview --> DevServer["Vite Dev Server"]
@@ -70,7 +70,7 @@ The backend owns orchestration. The frontend never starts shell commands directl
 - Frontend: React, Vite, TypeScript, Tailwind CSS, Monaco Editor later if needed.
 - Backend: Node.js, TypeScript, Fastify, `@fastify/websocket` or `ws`.
 - Database: SQLite for MVP.
-- Agent execution: Node `child_process.spawn`.
+- Agent execution: Node `child_process.spawn` running OpenCode.
 - Workspace storage: local filesystem under `workspaces/{projectId}`.
 - Preview: per-project Vite dev server on an allocated localhost port.
 - Package manager: npm for the first slice.
@@ -249,6 +249,40 @@ MVP can start preview only after an Agent run succeeds. Later versions can keep 
     - `preview.status`
     - `error`
 
+## OpenCode Integration
+
+OpenCode is the preferred real Agent provider for this project. The MVP should still include a fake runner for deterministic development and tests, but the production path should target OpenCode first.
+
+Official OpenCode integration points:
+
+- `opencode run [message..]` runs OpenCode non-interactively.
+- `opencode run --format json` emits raw JSON events that the backend can translate into `agent_logs`.
+- `opencode run --dir <workspace>` scopes execution to the project workspace.
+- `opencode run --agent <agent>` can select a configured OpenCode agent.
+- `opencode serve` starts a headless HTTP server for later API-based integration.
+- `@opencode-ai/sdk` can control a running OpenCode server from TypeScript when the project needs deeper session control.
+
+MVP decision:
+
+- Phase 1 uses a fake runner.
+- Phase 2 uses CLI mode: `opencode run --format json --dir <workspace> --agent build "<prompt>"`.
+- A later version can replace CLI spawning with `opencode serve` plus `@opencode-ai/sdk` if we need persistent sessions, lower startup overhead, or richer event APIs.
+
+OpenCode setup assumptions:
+
+- OpenCode must be installed on the host machine before Phase 2.
+- The host must authenticate OpenCode with at least one model provider or OpenCode Zen.
+- On Windows, OpenCode documentation recommends WSL for best compatibility, but also lists Chocolatey, Scoop, npm, Mise, Docker, and release binaries as install options.
+- The backend must treat a missing `opencode` executable as a setup error and keep the fake runner available for development.
+
+Recommended environment variables:
+
+- `AGENT_PROVIDER=opencode`
+- `OPENCODE_COMMAND=opencode`
+- `OPENCODE_AGENT=build`
+- `OPENCODE_MODEL=` optional provider/model override
+- `OPENCODE_RUN_FORMAT=json`
+
 ## Agent Prompt Contract
 
 The Agent prompt must be constrained:
@@ -261,12 +295,13 @@ The Agent prompt must be constrained:
 - Keep implementation simple and inspectable.
 - After changes, run the available checks if dependencies are installed.
 
-The configured CLI command should be externalized in environment variables, for example:
+The configured CLI command must be externalized so the fake runner and OpenCode runner can share the same orchestration path. For OpenCode, the Runner should build arguments explicitly instead of accepting a raw shell string from the API:
 
-- `AGENT_COMMAND=codex`
-- `AGENT_ARGS=exec --skip-git-repo-check`
+```text
+opencode run --format json --dir <workspace> --agent <agent> <prompt>
+```
 
-The exact command may differ depending on the local Agent installed on the machine. The Runner should make this configurable instead of hard-coding one provider.
+If `OPENCODE_MODEL` is set, append `--model <provider/model>`. Do not use `--dangerously-skip-permissions` in MVP.
 
 ## Error Handling
 
@@ -333,9 +368,11 @@ Manual acceptance test:
 - File tree and file viewer.
 - Preview manager.
 
-### Phase 2: Real Agent Integration
+### Phase 2: OpenCode Integration
 
-- Configure local Codex or Claude CLI.
+- Install and authenticate OpenCode locally.
+- Add an OpenCode runner beside the fake runner.
+- Run OpenCode with `opencode run --format json --dir <workspace>`.
 - Build robust prompt wrapper.
 - Capture run logs and failures.
 - Add cancel/retry.
@@ -385,14 +422,16 @@ Manual acceptance test:
 
 ## Open Decisions
 
-- Which local Agent CLI is available on the target machine: Codex, Claude Code, or both.
 - Whether the first implementation should be a monorepo with `apps/web` and `apps/api`, or a simpler two-folder layout.
 - Whether to use Fastify directly or NestJS.
 - Whether the MVP should start preview automatically after success or require a button click.
+- Which OpenCode install route to standardize on for this Windows machine.
+- Which OpenCode model provider to use first.
 
 Recommended defaults:
 
 - Use a monorepo with `apps/web`, `apps/api`, `packages/shared`, `templates/react-vite`, and `workspaces`.
 - Use Fastify directly for speed and less framework overhead.
 - Start preview with an explicit button first, then add auto-start later.
-- Make Agent command configurable so the MVP can run with a fake command during development and with Codex/Claude when installed.
+- Use fake runner during Phase 1 and OpenCode CLI runner during Phase 2.
+- Prefer `opencode run` first; move to `opencode serve` and `@opencode-ai/sdk` only when persistent session control becomes necessary.

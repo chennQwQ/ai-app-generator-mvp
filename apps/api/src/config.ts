@@ -1,6 +1,7 @@
 import path from "node:path";
 
 export interface AppConfig {
+  appRoot: string;
   apiHost: string;
   apiPort: number;
   webOrigin: string;
@@ -15,15 +16,32 @@ export interface AppConfig {
   previewPortStart: number;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const cwd = process.cwd();
+export interface LoadConfigOptions {
+  cwd?: string;
+}
+
+function resolveAppRoot(env: NodeJS.ProcessEnv, cwd: string): string {
+  if (env.APP_ROOT) {
+    return path.resolve(cwd, env.APP_ROOT);
+  }
+
+  return path.basename(cwd) === "api" ? path.resolve(cwd, "../..") : cwd;
+}
+
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  options: LoadConfigOptions = {}
+): AppConfig {
+  const cwd = options.cwd ?? process.cwd();
+  const appRoot = resolveAppRoot(env, cwd);
   return {
+    appRoot,
     apiHost: env.API_HOST ?? "127.0.0.1",
     apiPort: Number(env.API_PORT ?? 4317),
     webOrigin: env.WEB_ORIGIN ?? "http://127.0.0.1:5173",
-    storageDir: path.resolve(cwd, env.STORAGE_DIR ?? "./storage"),
-    workspaceDir: path.resolve(cwd, env.WORKSPACE_DIR ?? "./workspaces"),
-    templateDir: path.resolve(cwd, env.TEMPLATE_DIR ?? "./templates/react-vite"),
+    storageDir: path.resolve(appRoot, env.STORAGE_DIR ?? "./storage"),
+    workspaceDir: path.resolve(appRoot, env.WORKSPACE_DIR ?? "./workspaces"),
+    templateDir: path.resolve(appRoot, env.TEMPLATE_DIR ?? "./templates/react-vite"),
     agentProvider: env.AGENT_PROVIDER === "opencode" ? "opencode" : "fake",
     opencodeCommand: env.OPENCODE_COMMAND ?? "opencode",
     opencodeAgent: env.OPENCODE_AGENT ?? "build",

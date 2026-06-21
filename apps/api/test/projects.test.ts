@@ -141,6 +141,33 @@ describe("project routes", () => {
     await app.close();
   });
 
+  it("returns a generic listing error when project listing fails", async () => {
+    const app = Fastify({ logger: false });
+    await registerProjectRoutes(app, {
+      listProjects: () => {
+        throw new Error("raw db path C:\\secret\\app.sqlite");
+      },
+      getProject: () => {
+        throw new Error("database unavailable");
+      },
+      getWorkspacePath: () => {
+        throw new Error("database unavailable");
+      },
+      createProject: () => {
+        throw new Error("database unavailable");
+      }
+    } as unknown as ProjectService);
+
+    const response = await app.inject({ method: "GET", url: "/api/projects" });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ message: "Project listing failed" });
+    expect(response.body).not.toContain("secret");
+    expect(response.body).not.toContain("sqlite");
+
+    await app.close();
+  });
+
   it("does not turn unexpected project lookup errors into 404 responses", async () => {
     const app = Fastify({ logger: false });
     await registerProjectRoutes(app, {

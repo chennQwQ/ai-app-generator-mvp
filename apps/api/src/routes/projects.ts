@@ -2,7 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { ProjectNotFoundError, type ProjectService } from "../projects/project-service.js";
 
 export async function registerProjectRoutes(app: FastifyInstance, projects: ProjectService) {
-  app.get("/api/projects", async () => projects.listProjects());
+  app.get("/api/projects", async (request, reply) => {
+    try {
+      return projects.listProjects();
+    } catch (error) {
+      request.log.error({ err: error }, "Project listing failed");
+      return reply.code(500).send({ message: "Project listing failed" });
+    }
+  });
 
   app.get("/api/projects/:projectId", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };

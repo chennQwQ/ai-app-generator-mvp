@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { ProjectService } from "../projects/project-service.js";
+import { ProjectNotFoundError, type ProjectService } from "../projects/project-service.js";
 
 export async function registerProjectRoutes(app: FastifyInstance, projects: ProjectService) {
   app.get("/api/projects", async () => projects.listProjects());
@@ -8,8 +8,13 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
     const { projectId } = request.params as { projectId: string };
     try {
       return projects.getProject(projectId);
-    } catch {
-      return reply.code(404).send({ message: "Project not found" });
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        return reply.code(404).send({ message: "Project not found" });
+      }
+
+      request.log.error({ err: error }, "Project lookup failed");
+      return reply.code(500).send({ message: "Project lookup failed" });
     }
   });
 
@@ -21,8 +26,8 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
       const project = projects.createProject(name);
       return reply.code(201).send(project);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Project creation failed";
-      return reply.code(500).send({ message });
+      request.log.error({ err: error }, "Project creation failed");
+      return reply.code(500).send({ message: "Project creation failed" });
     }
   });
 }

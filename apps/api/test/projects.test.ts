@@ -1,9 +1,13 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { openDatabase } from "../src/db/database.js";
+import { ProjectService } from "../src/projects/project-service.js";
+import { registerProjectRoutes } from "../src/routes/projects.js";
 import { createServer } from "../src/server.js";
 
 let tempDir: string | undefined;
@@ -38,6 +42,81 @@ describe("project routes", () => {
 
     const list = await app.inject({ method: "GET", url: "/api/projects" });
     expect(list.json()).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("rolls back the project row and workspace when conversation creation fails", () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
+    db.exec(`
+      create trigger fail_conversation_insert
+      before insert on conversations
+      begin
+        select raise(abort, 'forced conversation insert failure');
+      end;
+    `);
+    const projects = new ProjectService(db, config);
+
+    expect(() => projects.createProject("Broken App")).toThrow("forced conversation insert failure");
+    expect(db.prepare("select count(*) as count from projects").get()).toEqual({ count: 0 });
+    expect(readdirSync(config.workspaceDir)).toHaveLength(0);
+
+    db.close();
+  });
+
+  it("returns a generic creation error when template copy fails", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const missingTemplateDir = path.join(tempDir, "missing-template");
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: missingTemplateDir
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Broken App" }
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ message: "Project creation failed" });
+    const body = response.body;
+    expect(body).not.toContain(missingTemplateDir);
+    expect(body).not.toContain("ENOENT");
+    expect(body).not.toContain("no such file or directory");
+
+    await app.close();
+  });
+
+  it("does not turn unexpected project lookup errors into 404 responses", async () => {
+    const app = Fastify({ logger: false });
+    await registerProjectRoutes(app, {
+      listProjects: () => [],
+      getProject: () => {
+        throw new Error("database unavailable");
+      },
+      getWorkspacePath: () => {
+        throw new Error("database unavailable");
+      },
+      createProject: () => {
+        throw new Error("database unavailable");
+      }
+    } as unknown as ProjectService);
+
+    const response = await app.inject({ method: "GET", url: "/api/projects/example" });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ message: "Project lookup failed" });
 
     await app.close();
   });

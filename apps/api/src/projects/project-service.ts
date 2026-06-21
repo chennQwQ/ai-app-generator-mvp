@@ -5,6 +5,13 @@ import type Database from "better-sqlite3";
 import type { ProjectSummary } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 
+export class ProjectNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Project not found: ${id}`);
+    this.name = "ProjectNotFoundError";
+  }
+}
+
 export class ProjectService {
   constructor(private readonly db: Database.Database, private readonly config: AppConfig) {}
 
@@ -17,15 +24,17 @@ export class ProjectService {
     mkdirSync(this.config.workspaceDir, { recursive: true });
     try {
       cpSync(this.config.templateDir, workspacePath, { recursive: true });
-      this.db.prepare(`
-        insert into projects (id, name, slug, workspace_path, status, preview_port, preview_status, created_at, updated_at)
-        values (?, ?, ?, ?, 'created', null, 'stopped', ?, ?)
-      `).run(id, name, slug, workspacePath, now, now);
+      this.db.transaction(() => {
+        this.db.prepare(`
+          insert into projects (id, name, slug, workspace_path, status, preview_port, preview_status, created_at, updated_at)
+          values (?, ?, ?, ?, 'created', null, 'stopped', ?, ?)
+        `).run(id, name, slug, workspacePath, now, now);
 
-      this.db.prepare(`
-        insert into conversations (id, project_id, created_at, updated_at)
-        values (?, ?, ?, ?)
-      `).run(nanoid(), id, now, now);
+        this.db.prepare(`
+          insert into conversations (id, project_id, created_at, updated_at)
+          values (?, ?, ?, ?)
+        `).run(nanoid(), id, now, now);
+      })();
     } catch (error) {
       rmSync(workspacePath, { recursive: true, force: true });
       throw error;
@@ -40,13 +49,13 @@ export class ProjectService {
 
   getProject(id: string): ProjectSummary {
     const row = this.db.prepare("select * from projects where id = ?").get(id);
-    if (!row) throw new Error(`Project not found: ${id}`);
+    if (!row) throw new ProjectNotFoundError(id);
     return mapProject(row);
   }
 
   getWorkspacePath(id: string): string {
     const row = this.db.prepare("select workspace_path from projects where id = ?").get(id) as { workspace_path: string } | undefined;
-    if (!row) throw new Error(`Project not found: ${id}`);
+    if (!row) throw new ProjectNotFoundError(id);
     return row.workspace_path;
   }
 

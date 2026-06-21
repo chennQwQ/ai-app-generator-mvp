@@ -4,6 +4,9 @@ declare module "better-sqlite3" {
     exec(sql: string): this;
     pragma(source: string): unknown;
     prepare(sql: string): Database.Statement;
+    transaction<Args extends unknown[], Result>(
+      fn: (...args: Args) => Result,
+    ): (...args: Args) => Result;
     close(): void;
   }
 
@@ -12,6 +15,9 @@ declare module "better-sqlite3" {
       exec(sql: string): this;
       pragma(source: string): unknown;
       prepare(sql: string): Statement;
+      transaction<Args extends unknown[], Result>(
+        fn: (...args: Args) => Result,
+      ): (...args: Args) => Result;
       close(): void;
     }
 

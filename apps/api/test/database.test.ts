@@ -285,4 +285,117 @@ describe("database schema", () => {
       db.close();
     }
   });
+
+  it("nulls orphan agent run references while migrating legacy messages", () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-db-"));
+    const filePath = path.join(tempDir, "app.sqlite");
+    const legacyDb = new Database(filePath);
+    legacyDb.exec(`
+      create table projects (
+        id text primary key,
+        name text not null,
+        slug text not null unique,
+        workspace_path text not null,
+        status text not null,
+        preview_port integer,
+        preview_status text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create table conversations (
+        id text primary key,
+        project_id text not null references projects(id) on delete cascade,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create table messages (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        role text not null,
+        content text not null,
+        agent_run_id text,
+        created_at text not null
+      );
+
+      create table agent_runs (
+        id text primary key,
+        project_id text not null references projects(id) on delete cascade,
+        conversation_id text not null references conversations(id) on delete cascade,
+        status text not null,
+        prompt text not null,
+        command text not null,
+        exit_code integer,
+        error_message text,
+        started_at text,
+        finished_at text,
+        created_at text not null
+      );
+
+      insert into projects (
+        id,
+        name,
+        slug,
+        workspace_path,
+        status,
+        preview_status,
+        created_at,
+        updated_at
+      ) values (
+        'project-1',
+        'Project One',
+        'project-one',
+        '/tmp/project-one',
+        'ready',
+        'stopped',
+        '2026-06-21T00:00:00.000Z',
+        '2026-06-21T00:00:00.000Z'
+      );
+
+      insert into conversations (
+        id,
+        project_id,
+        created_at,
+        updated_at
+      ) values (
+        'conversation-1',
+        'project-1',
+        '2026-06-21T00:00:00.000Z',
+        '2026-06-21T00:00:00.000Z'
+      );
+
+      insert into messages (
+        id,
+        conversation_id,
+        role,
+        content,
+        agent_run_id,
+        created_at
+      ) values (
+        'message-1',
+        'conversation-1',
+        'assistant',
+        'Built it',
+        'missing-run',
+        '2026-06-21T00:00:00.000Z'
+      );
+    `);
+    legacyDb.close();
+
+    const db = openDatabase(filePath);
+    try {
+      const messages = db
+        .prepare("select id, agent_run_id from messages")
+        .all() as any[];
+      expect(messages).toEqual([{ id: "message-1", agent_run_id: null }]);
+
+      const foreignKeyViolations = db
+        .prepare("pragma foreign_key_check")
+        .all();
+      expect(foreignKeyViolations).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
 });

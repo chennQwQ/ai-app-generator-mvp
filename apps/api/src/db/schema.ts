@@ -7,6 +7,10 @@ type ForeignKeyRow = {
   on_delete: string;
 };
 
+type TableRow = {
+  name: string;
+};
+
 export function migrate(db: Database.Database) {
   db.exec(`
     create table if not exists projects (
@@ -82,38 +86,53 @@ function migrateMessagesAgentRunForeignKey(db: Database.Database) {
   db.pragma("foreign_keys = OFF");
 
   try {
-    db.exec(`
-      drop table if exists messages_new;
+    db.transaction(() => {
+      const existingMessagesNew = db
+        .prepare("select name from sqlite_master where type = 'table' and name = ?")
+        .all("messages_new") as TableRow[];
 
-      create table messages_new (
-        id text primary key,
-        conversation_id text not null references conversations(id) on delete cascade,
-        role text not null,
-        content text not null,
-        agent_run_id text references agent_runs(id) on delete set null,
-        created_at text not null
-      );
+      if (existingMessagesNew.length > 0) {
+        throw new Error(
+          "Cannot migrate messages table while leftover messages_new table exists",
+        );
+      }
 
-      insert into messages_new (
-        id,
-        conversation_id,
-        role,
-        content,
-        agent_run_id,
-        created_at
-      )
-      select
-        id,
-        conversation_id,
-        role,
-        content,
-        agent_run_id,
-        created_at
-      from messages;
+      db.exec(`
+        create table messages_new (
+          id text primary key,
+          conversation_id text not null references conversations(id) on delete cascade,
+          role text not null,
+          content text not null,
+          agent_run_id text references agent_runs(id) on delete set null,
+          created_at text not null
+        );
 
-      drop table messages;
-      alter table messages_new rename to messages;
-    `);
+        insert into messages_new (
+          id,
+          conversation_id,
+          role,
+          content,
+          agent_run_id,
+          created_at
+        )
+        select
+          messages.id,
+          messages.conversation_id,
+          messages.role,
+          messages.content,
+          case
+            when messages.agent_run_id is null or agent_runs.id is not null
+              then messages.agent_run_id
+            else null
+          end,
+          messages.created_at
+        from messages
+        left join agent_runs on agent_runs.id = messages.agent_run_id;
+
+        drop table messages;
+        alter table messages_new rename to messages;
+      `);
+    })();
   } finally {
     db.pragma(`foreign_keys = ${foreignKeys?.foreign_keys ? "ON" : "OFF"}`);
   }

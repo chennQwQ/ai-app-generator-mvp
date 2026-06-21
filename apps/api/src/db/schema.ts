@@ -1,5 +1,12 @@
 import type Database from "better-sqlite3";
 
+type ForeignKeyRow = {
+  from: string;
+  table: string;
+  to: string;
+  on_delete: string;
+};
+
 export function migrate(db: Database.Database) {
   db.exec(`
     create table if not exists projects (
@@ -52,11 +59,76 @@ export function migrate(db: Database.Database) {
       sequence integer not null,
       created_at text not null
     );
+  `);
 
+  migrateMessagesAgentRunForeignKey(db);
+
+  db.exec(`
     create index if not exists idx_conversations_project_id on conversations(project_id);
     create index if not exists idx_messages_conversation_id on messages(conversation_id);
     create index if not exists idx_messages_agent_run_id on messages(agent_run_id);
     create index if not exists idx_agent_runs_project_id on agent_runs(project_id);
     create index if not exists idx_agent_logs_run_sequence on agent_logs(agent_run_id, sequence);
   `);
+}
+
+function migrateMessagesAgentRunForeignKey(db: Database.Database) {
+  if (hasMessagesAgentRunForeignKey(db)) return;
+
+  const foreignKeys = db.prepare("pragma foreign_keys").all()[0] as
+    | { foreign_keys: number }
+    | undefined;
+
+  db.pragma("foreign_keys = OFF");
+
+  try {
+    db.exec(`
+      drop table if exists messages_new;
+
+      create table messages_new (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        role text not null,
+        content text not null,
+        agent_run_id text references agent_runs(id) on delete set null,
+        created_at text not null
+      );
+
+      insert into messages_new (
+        id,
+        conversation_id,
+        role,
+        content,
+        agent_run_id,
+        created_at
+      )
+      select
+        id,
+        conversation_id,
+        role,
+        content,
+        agent_run_id,
+        created_at
+      from messages;
+
+      drop table messages;
+      alter table messages_new rename to messages;
+    `);
+  } finally {
+    db.pragma(`foreign_keys = ${foreignKeys?.foreign_keys ? "ON" : "OFF"}`);
+  }
+}
+
+function hasMessagesAgentRunForeignKey(db: Database.Database) {
+  const foreignKeys = db
+    .prepare("pragma foreign_key_list(messages)")
+    .all() as ForeignKeyRow[];
+
+  return foreignKeys.some(
+    (foreignKey) =>
+      foreignKey.from === "agent_run_id" &&
+      foreignKey.table === "agent_runs" &&
+      foreignKey.to === "id" &&
+      foreignKey.on_delete === "SET NULL",
+  );
 }

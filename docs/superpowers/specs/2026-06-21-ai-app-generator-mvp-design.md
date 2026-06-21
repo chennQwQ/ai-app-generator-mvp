@@ -253,6 +253,8 @@ MVP can start preview only after an Agent run succeeds. Later versions can keep 
 
 OpenCode is the preferred real Agent provider for this project. The MVP should still include a fake runner for deterministic development and tests, but the production path should target OpenCode first.
 
+The generator does not own model-provider configuration. Model choice, API keys, billing, and provider-specific settings belong to the user's OpenCode setup. For example, a user may configure DeepSeek in OpenCode, but the generator should still call OpenCode through the same integration contract.
+
 Official OpenCode integration points:
 
 - `opencode run [message..]` runs OpenCode non-interactively.
@@ -271,7 +273,9 @@ MVP decision:
 OpenCode setup assumptions:
 
 - OpenCode must be installed on the host machine before Phase 2.
-- The host must authenticate OpenCode with at least one model provider or OpenCode Zen.
+- The host must already have OpenCode authenticated and configured by the user.
+- The generator must not store model-provider API keys, DeepSeek credentials, OpenCode Zen credentials, or provider billing details.
+- The generator must not force a provider/model in MVP; it should let OpenCode use the user's active configuration.
 - On Windows, OpenCode documentation recommends WSL for best compatibility, but also lists Chocolatey, Scoop, npm, Mise, Docker, and release binaries as install options.
 - The backend must treat a missing `opencode` executable as a setup error and keep the fake runner available for development.
 
@@ -280,7 +284,6 @@ Recommended environment variables:
 - `AGENT_PROVIDER=opencode`
 - `OPENCODE_COMMAND=opencode`
 - `OPENCODE_AGENT=build`
-- `OPENCODE_MODEL=` optional provider/model override
 - `OPENCODE_RUN_FORMAT=json`
 
 ## Agent Prompt Contract
@@ -301,7 +304,7 @@ The configured CLI command must be externalized so the fake runner and OpenCode 
 opencode run --format json --dir <workspace> --agent <agent> <prompt>
 ```
 
-If `OPENCODE_MODEL` is set, append `--model <provider/model>`. Do not use `--dangerously-skip-permissions` in MVP.
+Do not append `--model` in MVP. Provider and model selection should come from the user's OpenCode configuration. Do not use `--dangerously-skip-permissions` in MVP.
 
 ## Error Handling
 
@@ -370,7 +373,7 @@ Manual acceptance test:
 
 ### Phase 2: OpenCode Integration
 
-- Install and authenticate OpenCode locally.
+- Verify OpenCode is installed and already authenticated/configured by the user.
 - Add an OpenCode runner beside the fake runner.
 - Run OpenCode with `opencode run --format json --dir <workspace>`.
 - Build robust prompt wrapper.
@@ -425,8 +428,7 @@ Manual acceptance test:
 - Whether the first implementation should be a monorepo with `apps/web` and `apps/api`, or a simpler two-folder layout.
 - Whether to use Fastify directly or NestJS.
 - Whether the MVP should start preview automatically after success or require a button click.
-- Which OpenCode install route to standardize on for this Windows machine.
-- Which OpenCode model provider to use first.
+- Whether the backend should allow an optional OpenCode command path override for machines where `opencode` is not on `PATH`.
 
 Recommended defaults:
 
@@ -435,3 +437,4 @@ Recommended defaults:
 - Start preview with an explicit button first, then add auto-start later.
 - Use fake runner during Phase 1 and OpenCode CLI runner during Phase 2.
 - Prefer `opencode run` first; move to `opencode serve` and `@opencode-ai/sdk` only when persistent session control becomes necessary.
+- Treat model provider configuration, including DeepSeek, as an OpenCode concern outside this generator.

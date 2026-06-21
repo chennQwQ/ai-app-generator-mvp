@@ -12,6 +12,7 @@ coverage/
 # Runtime workspaces and generated apps
 workspaces/
 previews/
+storage/
 storage/*.sqlite
 storage/*.sqlite-*
 

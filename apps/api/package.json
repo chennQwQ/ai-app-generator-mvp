@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "cd ../.. && vitest run --no-cache --root . --environment node apps/api/test/config.test.ts apps/api/test/health.test.ts apps/api/test/database.test.ts apps/api/test/template.test.ts",
+    "test": "cd ../.. && vitest run --no-cache --root . --environment node apps/api/test/config.test.ts apps/api/test/health.test.ts apps/api/test/database.test.ts apps/api/test/template.test.ts apps/api/test/projects.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json"
   },
   "dependencies": {

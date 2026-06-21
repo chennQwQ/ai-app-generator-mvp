@@ -1,15 +1,23 @@
+import path from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { AppConfig } from "./config.js";
+import { openDatabase } from "./db/database.js";
+import { ProjectService } from "./projects/project-service.js";
+import { registerProjectRoutes } from "./routes/projects.js";
 
 export async function createServer(config: AppConfig) {
   const app = Fastify({ logger: true });
+  const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
+  const projects = new ProjectService(db, config);
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);
 
+  app.addHook("onClose", async () => db.close());
   app.get("/api/health", async () => ({ ok: true }));
+  await registerProjectRoutes(app, projects);
 
   return app;
 }

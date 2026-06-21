@@ -98,6 +98,49 @@ describe("project routes", () => {
     await app.close();
   });
 
+  it("returns 400 when creating a project without a payload", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects"
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ message: "Project name is required" });
+
+    await app.close();
+  });
+
+  it("returns 400 when creating a project with a non-string name", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: 123 }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ message: "Project name is required" });
+
+    await app.close();
+  });
+
   it("does not turn unexpected project lookup errors into 404 responses", async () => {
     const app = Fastify({ logger: false });
     await registerProjectRoutes(app, {

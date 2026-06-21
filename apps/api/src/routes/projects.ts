@@ -19,8 +19,11 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
   });
 
   app.post("/api/projects", async (request, reply) => {
-    const body = request.body as { name?: string };
-    const name = body.name?.trim();
+    const body = request.body;
+    const name =
+      body && typeof body === "object" && "name" in body && typeof body.name === "string"
+        ? body.name.trim()
+        : "";
     if (!name) return reply.code(400).send({ message: "Project name is required" });
     try {
       const project = projects.createProject(name);

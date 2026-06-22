@@ -51,6 +51,22 @@ describe("FileService", () => {
     await expect(service.readFile(workspacePath, "src\\App.tsx")).resolves.toBe("export default function App() {}\n");
   });
 
+  it.each([
+    ".env",
+    "node_modules/hidden.js",
+    ".git/config",
+    "dist/app.js",
+    ".cache/state.json",
+    "coverage/index.html"
+  ])("rejects direct reads of ignored path %s", async (relativePath) => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    createWorkspace(workspacePath);
+    const service = new FileService();
+
+    await expect(service.readFile(workspacePath, relativePath)).rejects.toThrow("Invalid file path");
+  });
+
   it.each(["../secret.txt", "..\\secret.txt", path.resolve("secret.txt"), "C:\\secret.txt"])(
     "rejects invalid file path %s",
     async (relativePath) => {
@@ -156,6 +172,32 @@ describe("file routes", () => {
     expect(response.json()).toEqual({ message: "Invalid file path" });
 
     await app.close();
+  });
+
+  it("returns 400 for direct reads of ignored files", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-file-routes-"));
+    const config = testConfig(tempDir);
+    const app = await createServer(config);
+
+    try {
+      const projectResponse = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        payload: { name: "Ignored File App" }
+      });
+      const project = projectResponse.json();
+      writeFileSync(path.join(config.workspaceDir, project.id, ".env"), "SECRET=value\n");
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/projects/${project.id}/files/content?path=${encodeURIComponent(".env")}`
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ message: "Invalid file path" });
+    } finally {
+      await app.close();
+    }
   });
 
   it("returns 404 when the project is missing", async () => {

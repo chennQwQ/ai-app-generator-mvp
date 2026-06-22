@@ -107,9 +107,17 @@ export class FileService {
 function resolveWorkspacePath(rootPath: string, relativePath: string): string {
   if (!relativePath || isAbsolutePath(relativePath)) throw new InvalidFilePathError();
   const normalizedPath = relativePath.replace(/\\/g, path.sep);
+  if (hasIgnoredPathComponent(normalizedPath)) throw new InvalidFilePathError();
   const targetPath = path.resolve(rootPath, normalizedPath);
   assertInsideWorkspace(rootPath, targetPath);
   return targetPath;
+}
+
+function hasIgnoredPathComponent(relativePath: string): boolean {
+  return relativePath
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .some((component) => ignoredNames.has(component));
 }
 
 function isAbsolutePath(filePath: string): boolean {

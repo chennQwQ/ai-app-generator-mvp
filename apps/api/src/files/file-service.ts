@@ -46,6 +46,8 @@ export class FileService {
     const targetPath = resolveWorkspacePath(rootPath, relativePath);
     let stats;
 
+    await assertNoSymlinkPathComponents(rootPath, targetPath);
+
     try {
       stats = await lstat(targetPath);
     } catch (error) {
@@ -129,6 +131,24 @@ function assertInsideWorkspace(rootPath: string, targetPath: string): void {
   if (relative === "") return;
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new InvalidFilePathError();
+  }
+}
+
+async function assertNoSymlinkPathComponents(rootPath: string, targetPath: string): Promise<void> {
+  const relativePath = path.relative(rootPath, targetPath);
+  const parts = relativePath.split(path.sep).filter(Boolean);
+  let currentPath = rootPath;
+
+  for (const part of parts) {
+    currentPath = path.join(currentPath, part);
+    let stats;
+    try {
+      stats = await lstat(currentPath);
+    } catch (error) {
+      if (isNotFoundError(error)) throw new FileNotFoundError();
+      throw error;
+    }
+    if (stats.isSymbolicLink()) throw new InvalidFilePathError();
   }
 }
 

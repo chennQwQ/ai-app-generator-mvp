@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
@@ -11,6 +11,7 @@ import { registerFileRoutes } from "../src/routes/files.js";
 import { createServer } from "../src/server.js";
 
 let tempDir: string | undefined;
+const canCreateFileSymlinks = probeFileSymlinkSupport();
 
 afterEach(() => {
   if (tempDir) rmSync(tempDir, { recursive: true, force: true });
@@ -78,6 +79,26 @@ describe("FileService", () => {
     await expect(service.readFile(workspacePath, relativePath)).rejects.toThrow("Invalid file path");
     }
   );
+
+  it.skipIf(!canCreateFileSymlinks)("rejects direct symlink file reads", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    createWorkspace(workspacePath);
+    symlinkSync(path.join(workspacePath, "README.md"), path.join(workspacePath, "readme-link.md"), "file");
+    const service = new FileService();
+
+    await expect(service.readFile(workspacePath, "readme-link.md")).rejects.toThrow("Invalid file path");
+  });
+
+  it("rejects reads through symlink directory components", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    createWorkspace(workspacePath);
+    symlinkSync(path.join(workspacePath, "src"), path.join(workspacePath, "linked-src"), "junction");
+    const service = new FileService();
+
+    await expect(service.readFile(workspacePath, "linked-src/App.tsx")).rejects.toThrow("Invalid file path");
+  });
 
   it("rejects directory reads with a client-safe error", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
@@ -191,6 +212,33 @@ describe("file routes", () => {
       const response = await app.inject({
         method: "GET",
         url: `/api/projects/${project.id}/files/content?path=${encodeURIComponent(".env")}`
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ message: "Invalid file path" });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns 400 for reads through symlink directory components", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-file-routes-"));
+    const config = testConfig(tempDir);
+    const app = await createServer(config);
+
+    try {
+      const projectResponse = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        payload: { name: "Symlink Route App" }
+      });
+      const project = projectResponse.json();
+      const workspacePath = path.join(config.workspaceDir, project.id);
+      symlinkSync(path.join(workspacePath, "src"), path.join(workspacePath, "linked-src"), "junction");
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/projects/${project.id}/files/content?path=${encodeURIComponent("linked-src/App.tsx")}`
       });
 
       expect(response.statusCode).toBe(400);
@@ -355,4 +403,19 @@ function testConfig(root: string): AppConfig {
     TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
     AGENT_PROVIDER: "fake"
   });
+}
+
+function probeFileSymlinkSupport(): boolean {
+  const probeDir = mkdtempSync(path.join(tmpdir(), "ai-generator-symlink-probe-"));
+  try {
+    const targetPath = path.join(probeDir, "target.txt");
+    const linkPath = path.join(probeDir, "link.txt");
+    writeFileSync(targetPath, "x");
+    symlinkSync(targetPath, linkPath, "file");
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
 }

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import { loadConfig } from "../src/config.js";
 import { createServer } from "../src/server.js";
 import type { AppConfig } from "../src/config.js";
@@ -181,27 +182,17 @@ function createWebSocket(
 
 async function waitForOpen(socket: WebSocket): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", () => resolve(), { once: true });
-    socket.addEventListener("error", () => reject(new Error("WebSocket failed to open")), {
-      once: true
-    });
+    socket.once("open", () => resolve());
+    socket.once("error", () => reject(new Error("WebSocket failed to open")));
   });
 }
 
 async function waitForJsonMessage(socket: WebSocket): Promise<ProjectEvent> {
   const message = await new Promise<string>((resolve, reject) => {
-    socket.addEventListener(
-      "message",
-      (event) => {
-        if (typeof event.data === "string") {
-          resolve(event.data);
-        } else {
-          reject(new Error("Expected text WebSocket message"));
-        }
-      },
-      { once: true }
-    );
-    socket.addEventListener("error", () => reject(new Error("WebSocket error")), { once: true });
+    socket.once("message", (data) => {
+      resolve(data.toString());
+    });
+    socket.once("error", () => reject(new Error("WebSocket error")));
   });
 
   return JSON.parse(message) as ProjectEvent;
@@ -209,10 +200,8 @@ async function waitForJsonMessage(socket: WebSocket): Promise<ProjectEvent> {
 
 async function waitForClose(socket: WebSocket): Promise<{ code: number; reason: string }> {
   return new Promise((resolve) => {
-    socket.addEventListener(
-      "close",
-      (event) => resolve({ code: event.code, reason: event.reason }),
-      { once: true }
+    socket.once("close", (code, reason) =>
+      resolve({ code, reason: reason.toString() })
     );
   });
 }

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 import type { PreviewInfo } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
@@ -11,7 +11,14 @@ export interface PreviewCommand {
 }
 
 export type PreviewCommandFactory = (port: number) => PreviewCommand;
-export type PreviewCommandProvider = PreviewCommand | PreviewCommandFactory;
+export type PreviewCommandSource = PreviewCommand | PreviewCommandFactory;
+
+export interface PreviewCommandPlan {
+  install?: PreviewCommandSource;
+  dev: PreviewCommandSource;
+}
+
+export type PreviewCommandProvider = PreviewCommandSource | PreviewCommandPlan;
 
 interface ActivePreview {
   process: ChildProcessWithoutNullStreams;
@@ -27,17 +34,19 @@ export class PreviewManager {
   constructor(
     private readonly config: AppConfig,
     private readonly bus: EventBus,
-    commandProvider: PreviewCommandProvider = (port) => ({
-      command: "npm",
-      args: ["run", "dev", "--", "--host", config.previewHost, "--port", String(port)]
-    })
+    commandProvider: PreviewCommandProvider = {
+      install: { command: "npm", args: ["install"] },
+      dev: (port) => ({
+        command: "npm",
+        args: ["run", "dev", "--", "--host", config.previewHost, "--port", String(port)]
+      })
+    }
   ) {
     this.nextPort = config.previewPortStart;
-    this.commandFactory =
-      typeof commandProvider === "function" ? commandProvider : () => commandProvider;
+    this.commandPlan = normalizeCommandProvider(commandProvider);
   }
 
-  private readonly commandFactory: PreviewCommandFactory;
+  private readonly commandPlan: ResolvedPreviewCommandPlan;
 
   buildUrl(port: number): string {
     return `http://${this.config.previewHost}:${port}`;
@@ -48,17 +57,33 @@ export class PreviewManager {
 
     const port = this.nextPort;
     this.nextPort += 1;
-    const command = this.commandFactory(port);
-    const child = spawnPreview(command.command, command.args, workspacePath);
     const preview: PreviewInfo = {
-      status: "running",
+      status: this.commandPlan.install ? "starting" : "running",
       port,
       url: this.buildUrl(port)
     };
+    const installCommand = this.commandPlan.install?.(port);
 
-    this.previews.set(projectId, { process: child, info: preview });
-    this.bus.publish({ type: "preview.status", projectId, preview });
-    return preview;
+    if (installCommand) {
+      const installProcess = spawnPreview(installCommand.command, installCommand.args, workspacePath);
+      this.previews.set(projectId, { process: installProcess, info: preview });
+      this.attachInstallHandlers({
+        projectId,
+        workspacePath,
+        port,
+        child: installProcess,
+        preview
+      });
+      this.bus.publish({ type: "preview.status", projectId, preview });
+      return preview;
+    }
+
+    const devPreview = { ...preview, status: "running" as const };
+    const devProcess = this.spawnDevProcess(projectId, workspacePath, port, devPreview);
+    this.previews.set(projectId, { process: devProcess, info: devPreview });
+
+    this.bus.publish({ type: "preview.status", projectId, preview: devPreview });
+    return devPreview;
   }
 
   stop(projectId: string): PreviewInfo {
@@ -76,6 +101,112 @@ export class PreviewManager {
       this.stop(projectId);
     }
   }
+
+  private spawnDevProcess(
+    projectId: string,
+    workspacePath: string,
+    port: number,
+    preview: PreviewInfo
+  ): ChildProcessWithoutNullStreams {
+    const command = this.commandPlan.dev(port);
+    const child = spawnPreview(command.command, command.args, workspacePath);
+    this.attachDevHandlers(projectId, child, preview);
+    return child;
+  }
+
+  private finishInstallAndStartDev(
+    projectId: string,
+    workspacePath: string,
+    port: number,
+    installProcess: ChildProcessWithoutNullStreams,
+    preview: PreviewInfo
+  ): void {
+    const active = this.previews.get(projectId);
+    if (!active || active.process !== installProcess) return;
+
+    const runningPreview: PreviewInfo = { ...preview, status: "running" };
+    const devProcess = this.spawnDevProcess(projectId, workspacePath, port, runningPreview);
+    this.previews.set(projectId, { process: devProcess, info: runningPreview });
+    this.bus.publish({ type: "preview.status", projectId, preview: runningPreview });
+  }
+
+  private markPreviewError(
+    projectId: string,
+    child: ChildProcessWithoutNullStreams,
+    preview: PreviewInfo
+  ): void {
+    const active = this.previews.get(projectId);
+    if (!active || active.process !== child) return;
+
+    this.previews.delete(projectId);
+    const errorPreview: PreviewInfo = { ...preview, status: "error" };
+    this.bus.publish({ type: "preview.status", projectId, preview: errorPreview });
+  }
+
+  private attachInstallHandlers(options: InstallHandlerOptions): void {
+    options.child.on("error", () => {
+      this.markPreviewError(options.projectId, options.child, options.preview);
+    });
+    options.child.on("close", (code) => {
+      if (code === 0) {
+        this.finishInstallAndStartDev(
+          options.projectId,
+          options.workspacePath,
+          options.port,
+          options.child,
+          options.preview
+        );
+        return;
+      }
+
+      this.markPreviewError(options.projectId, options.child, options.preview);
+    });
+  }
+
+  private attachDevHandlers(
+    projectId: string,
+    child: ChildProcessWithoutNullStreams,
+    preview: PreviewInfo
+  ): void {
+    child.on("error", () => {
+      this.markPreviewError(projectId, child, preview);
+    });
+    child.on("close", () => {
+      this.markPreviewError(projectId, child, preview);
+    });
+  }
+}
+
+interface ResolvedPreviewCommandPlan {
+  install?: PreviewCommandFactory;
+  dev: PreviewCommandFactory;
+}
+
+interface InstallHandlerOptions {
+  projectId: string;
+  workspacePath: string;
+  port: number;
+  child: ChildProcessWithoutNullStreams;
+  preview: PreviewInfo;
+}
+
+function normalizeCommandProvider(commandProvider: PreviewCommandProvider): ResolvedPreviewCommandPlan {
+  if (isCommandPlan(commandProvider)) {
+    return {
+      install: commandProvider.install ? toCommandFactory(commandProvider.install) : undefined,
+      dev: toCommandFactory(commandProvider.dev)
+    };
+  }
+
+  return { dev: toCommandFactory(commandProvider) };
+}
+
+function toCommandFactory(commandSource: PreviewCommandSource): PreviewCommandFactory {
+  return typeof commandSource === "function" ? commandSource : () => commandSource;
+}
+
+function isCommandPlan(commandProvider: PreviewCommandProvider): commandProvider is PreviewCommandPlan {
+  return typeof commandProvider === "object" && "dev" in commandProvider;
 }
 
 function spawnPreview(
@@ -100,6 +231,7 @@ function spawnPreview(
 
   return spawn(resolvedCommand, args, {
     cwd: workspacePath,
+    detached: process.platform !== "win32",
     windowsHide: true
   });
 }
@@ -107,13 +239,26 @@ function spawnPreview(
 function killPreview(child: ChildProcessWithoutNullStreams): void {
   if (child.killed) return;
   if (process.platform === "win32" && child.pid) {
-    const killer = spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+    spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
       stdio: "ignore",
       windowsHide: true
     });
-    killer.unref();
   }
+
+  if (process.platform !== "win32" && child.pid) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+      return;
+    } catch (error) {
+      if (!isMissingProcessError(error)) throw error;
+    }
+  }
+
   child.kill();
+}
+
+function isMissingProcessError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH";
 }
 
 function resolveWindowsCommand(commandName: string, workspacePath: string): string {

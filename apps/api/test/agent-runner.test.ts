@@ -128,7 +128,85 @@ describe("OpenCodeAgentRunner", () => {
     ]);
     expect(recorded.args).not.toContain("--model");
   });
+
+  it.skipIf(process.platform !== "win32")("resolves an extensionless Windows command to a .cmd shim on PATH", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-path-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    mkdirSync(workspacePath);
+    const commandPath = path.join(tempDir, "opencode.cmd");
+    const cliPath = path.join(tempDir, "opencode-shim-target.cjs");
+    const recordPath = path.join(tempDir, "argv.json");
+    writeFileSync(
+      cliPath,
+      [
+        "const fs = require('node:fs');",
+        `fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));`,
+        "console.log('path shim stdout');"
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      commandPath,
+      ["@echo off", `node "${cliPath}" %*`].join("\r\n"),
+      "utf8"
+    );
+    const originalPath = process.env.PATH;
+    const originalPathExt = process.env.PATHEXT;
+    process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ""}`;
+    process.env.PATHEXT = ".CMD;.EXE;.BAT;.COM";
+    const prompt = "Use default opencode & echo INJECTED_STDOUT | more <x> \"quoted\"";
+    const runner = new OpenCodeAgentRunner(
+      {
+        ...fakeConfig(tempDir),
+        agentProvider: "opencode",
+        opencodeCommand: "opencode --shim-flag"
+      },
+      new EventBus()
+    );
+    const logs: string[] = [];
+
+    try {
+      const result = await runner.run({
+        projectId: "project-1",
+        runId: "run-1",
+        workspacePath,
+        prompt,
+        onLog: (_stream, content) => logs.push(content)
+      });
+
+      expect(result).toEqual({ exitCode: 0, errorMessage: null });
+      expect(logs.join("")).toContain("path shim stdout");
+      expect(logs.join("")).not.toContain("INJECTED_STDOUT");
+      const recorded = JSON.parse(readFileSync(recordPath, "utf8")) as {
+        cwd: string;
+        args: string[];
+      };
+      expect(recorded.cwd).toBe(workspacePath);
+      expect(recorded.args).toEqual([
+        "--shim-flag",
+        "run",
+        "--agent",
+        "build",
+        "--format",
+        "json",
+        prompt
+      ]);
+      expect(recorded.args).not.toContain("--model");
+    } finally {
+      restoreEnv("PATH", originalPath);
+      restoreEnv("PATHEXT", originalPathExt);
+    }
+  });
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
 
 function fakeConfig(root: string): AppConfig {
   return {

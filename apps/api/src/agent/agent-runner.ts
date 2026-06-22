@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentLogStream } from "@ai-app-generator/shared";
@@ -142,10 +142,13 @@ function spawnOpenCode(
   args: string[],
   workspacePath: string
 ): ChildProcessWithoutNullStreams {
-  if (process.platform === "win32" && isWindowsCommandShim(commandName)) {
+  const resolvedCommand =
+    process.platform === "win32" ? resolveWindowsCommand(commandName, workspacePath) : commandName;
+
+  if (process.platform === "win32" && isWindowsCommandShim(resolvedCommand)) {
     return spawn(
       process.env.ComSpec ?? "cmd.exe",
-      ["/d", "/s", "/c", buildWindowsShimCommand(commandName, args)],
+      ["/d", "/s", "/c", buildWindowsShimCommand(resolvedCommand, args)],
       {
         cwd: workspacePath,
         windowsHide: true,
@@ -154,10 +157,51 @@ function spawnOpenCode(
     );
   }
 
-  return spawn(commandName, args, {
+  return spawn(resolvedCommand, args, {
     cwd: workspacePath,
     windowsHide: true
   });
+}
+
+function resolveWindowsCommand(commandName: string, workspacePath: string): string {
+  if (path.extname(commandName)) return commandName;
+
+  for (const candidate of getWindowsCommandCandidates(commandName, workspacePath)) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return commandName;
+}
+
+function getWindowsCommandCandidates(commandName: string, workspacePath: string): string[] {
+  const extensions = getWindowsPathExtensions();
+  if (hasPathSeparator(commandName)) {
+    const basePath = path.resolve(workspacePath, commandName);
+    return extensions.map((extension) => `${basePath}${extension}`);
+  }
+
+  return getWindowsPathDirectories().flatMap((directory) =>
+    extensions.map((extension) => path.join(directory, `${commandName}${extension}`))
+  );
+}
+
+function getWindowsPathExtensions(): string[] {
+  const extensions = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim())
+    .filter(Boolean);
+  return extensions.length > 0 ? extensions : [".COM", ".EXE", ".BAT", ".CMD"];
+}
+
+function getWindowsPathDirectories(): string[] {
+  return (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .map((directory) => directory.trim())
+    .filter(Boolean);
+}
+
+function hasPathSeparator(value: string): boolean {
+  return value.includes("/") || value.includes("\\");
 }
 
 function isWindowsCommandShim(commandName: string): boolean {

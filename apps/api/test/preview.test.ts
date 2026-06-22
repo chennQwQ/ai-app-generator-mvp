@@ -229,6 +229,34 @@ describe("preview routes", () => {
 
     await app.close();
   });
+
+  it("returns 404 when stopping a preview for a missing project", async () => {
+    const app = Fastify({ logger: false });
+    await registerPreviewRoutes(
+      app,
+      {
+        getWorkspacePath: (projectId: string) => {
+          throw new ProjectNotFoundError(projectId);
+        }
+      } as unknown as ProjectService,
+      {
+        start: () => {
+          throw new Error("start should not be called");
+        },
+        stop: () => ({ status: "stopped", port: null, url: null })
+      }
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects/missing-project/preview/stop"
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ message: "Project not found" });
+
+    await app.close();
+  });
 });
 
 function makeNodeWorkspace(root: string, name: string): string {

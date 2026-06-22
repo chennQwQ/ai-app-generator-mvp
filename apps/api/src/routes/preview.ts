@@ -23,8 +23,19 @@ export async function registerPreviewRoutes(
     }
   });
 
-  app.post("/api/projects/:projectId/preview/stop", async (request) => {
+  app.post("/api/projects/:projectId/preview/stop", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
-    return previewManager.stop(projectId);
+
+    try {
+      projects.getWorkspacePath(projectId);
+      return previewManager.stop(projectId);
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        return reply.code(404).send({ message: "Project not found" });
+      }
+
+      request.log.error({ err: error }, "Preview stop failed");
+      return reply.code(500).send({ message: "Preview stop failed" });
+    }
   });
 }

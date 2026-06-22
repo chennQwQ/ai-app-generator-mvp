@@ -289,7 +289,9 @@ describe("message routes", () => {
           command: "test-runner",
           run: async () => {
             throw new Error("runner failed");
-          }
+          },
+          cancel: () => {},
+          healthCheck: async () => ({ ok: true })
         } satisfies AgentRunner,
         bus
       );

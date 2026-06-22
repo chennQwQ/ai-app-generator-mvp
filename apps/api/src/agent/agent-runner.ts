@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentLogStream } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
+import type { AuditService } from "../audit/audit-service.js";
 import type { EventBus } from "../events/event-bus.js";
 
 export interface AgentRunRequest {
@@ -29,7 +30,7 @@ export class FakeAgentRunner implements AgentRunner {
   readonly command = "fake";
   private readonly controllers = new Map<string, AbortController>();
 
-  constructor(_config: AppConfig, _bus: EventBus) {}
+  constructor(_config: AppConfig, _bus: EventBus, private readonly audit?: AuditService) {}
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const controller = new AbortController();
@@ -47,6 +48,14 @@ export class FakeAgentRunner implements AgentRunner {
     const srcDir = path.join(request.workspacePath, "src");
     mkdirSync(srcDir, { recursive: true });
     writeFileSync(path.join(srcDir, "App.tsx"), renderFakeApp(request.prompt), "utf8");
+
+    this.audit?.recordLog({
+      projectId: request.projectId,
+      runId: request.runId,
+      toolName: "file_write",
+      parameters: { path: "src/App.tsx" },
+      exitCode: 0
+    });
 
     emitLog(request, "event", "Fake agent wrote src/App.tsx");
 
@@ -76,7 +85,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
   private readonly commandArgs: string[];
   private readonly processes = new Map<string, ReturnType<typeof spawnOpenCode>>();
 
-  constructor(private readonly config: AppConfig, _bus: EventBus) {
+  constructor(private readonly config: AppConfig, _bus: EventBus, private readonly audit?: AuditService) {
     const commandParts = splitCommand(config.opencodeCommand);
     this.commandName = commandParts[0] ?? config.opencodeCommand;
     this.commandArgs = commandParts.slice(1);
@@ -103,6 +112,14 @@ export class OpenCodeAgentRunner implements AgentRunner {
         request.workspacePath,
         request.prompt
       ];
+
+      this.audit?.recordLog({
+        projectId: request.projectId,
+        runId: request.runId,
+        toolName: "shell",
+        parameters: { command: `${this.config.opencodeCommand} run --agent ${this.config.opencodeAgent} ...` },
+        exitCode: undefined
+      });
 
       const child = spawnOpenCode(this.commandName, args, request.workspacePath);
       this.processes.set(request.runId, child);
@@ -161,10 +178,10 @@ export class OpenCodeAgentRunner implements AgentRunner {
   }
 }
 
-export function createAgentRunner(config: AppConfig, bus: EventBus): AgentRunner {
+export function createAgentRunner(config: AppConfig, bus: EventBus, audit?: AuditService): AgentRunner {
   return config.agentProvider === "opencode"
-    ? new OpenCodeAgentRunner(config, bus)
-    : new FakeAgentRunner(config, bus);
+    ? new OpenCodeAgentRunner(config, bus, audit)
+    : new FakeAgentRunner(config, bus, audit);
 }
 
 function renderFakeApp(prompt: string): string {

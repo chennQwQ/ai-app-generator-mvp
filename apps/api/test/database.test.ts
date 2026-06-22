@@ -26,6 +26,7 @@ describe("database schema", () => {
       expect(tables).toContain("messages");
       expect(tables).toContain("agent_runs");
       expect(tables).toContain("agent_logs");
+      expect(tables).toContain("audit_logs");
     } finally {
       db.close();
     }

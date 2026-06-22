@@ -4,7 +4,8 @@ import type {
   ChatMessage,
   FileNode,
   PreviewInfo,
-  ProjectSummary
+  ProjectSummary,
+  TemplateMeta
 } from "@ai-app-generator/shared";
 
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:4317";
@@ -19,10 +20,14 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   return request<ProjectSummary[]>("/api/projects");
 }
 
-export async function createProject(name: string): Promise<ProjectSummary> {
+export async function listTemplates(): Promise<TemplateMeta[]> {
+  return request<TemplateMeta[]>("/api/templates");
+}
+
+export async function createProject(name: string, template?: string): Promise<ProjectSummary> {
   return request<ProjectSummary>("/api/projects", {
     method: "POST",
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name, template })
   });
 }
 

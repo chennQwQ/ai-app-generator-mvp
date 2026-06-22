@@ -475,6 +475,17 @@ a {
   justify-content: center;
 }
 
+.template-select {
+  border: 1px solid #d7dde4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172026;
+  font-size: 13px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
 .show-preview-btn {
   margin-top: 10px;
 }

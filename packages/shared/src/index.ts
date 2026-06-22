@@ -88,3 +88,66 @@ export interface TemplateMeta {
   name: string;
   description: string;
 }
+
+export interface ToolParameter {
+  name: string;
+  type: "string" | "number" | "boolean";
+  description: string;
+  required?: boolean;
+  default?: string | number | boolean;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: ToolParameter[];
+}
+
+export const toolDefinitions: ToolDefinition[] = [
+  {
+    name: "shell",
+    description: "Execute a shell command inside the workspace",
+    parameters: [
+      { name: "command", type: "string", description: "The shell command to execute", required: true },
+      { name: "cwd", type: "string", description: "Working directory relative to workspace root" }
+    ]
+  },
+  {
+    name: "file_write",
+    description: "Write content to a file in the workspace",
+    parameters: [
+      { name: "path", type: "string", description: "File path relative to workspace root", required: true },
+      { name: "content", type: "string", description: "File content", required: true }
+    ]
+  },
+  {
+    name: "npm_install",
+    description: "Install npm dependencies in the workspace",
+    parameters: [
+      { name: "packages", type: "string", description: "Space-separated package names to install" },
+      { name: "dev", type: "boolean", description: "Install as devDependency", default: false }
+    ]
+  },
+  {
+    name: "npm_build",
+    description: "Run the project build script",
+    parameters: [
+      { name: "script", type: "string", description: "The npm script name", default: "build" }
+    ]
+  }
+];
+
+export function getToolDefinition(name: string): ToolDefinition | undefined {
+  return toolDefinitions.find((t) => t.name === name);
+}
+
+export interface AuditLog {
+  id: string;
+  projectId: string;
+  runId: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  exitCode: number | null;
+  output: string | null;
+  createdAt: string;
+}

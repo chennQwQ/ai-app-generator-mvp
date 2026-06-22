@@ -36,6 +36,15 @@ export async function registerMessageRoutes(
     const content = parseContent(request.body);
     if (!content) return reply.code(400).send({ message: "Message content is required" });
 
+    const agentHealth = await runner.healthCheck();
+    if (!agentHealth.ok) {
+      const reason = agentHealth.reason ?? "Agent is not configured";
+      request.log.error({ reason }, "Agent health check failed");
+      return reply.code(500).send({
+        message: `Agent is not available: ${reason}. Please check your Agent provider configuration and ensure the required command is installed.`
+      });
+    }
+
     let workspacePath: string;
     let created: { message: unknown; run: AgentRun };
     try {

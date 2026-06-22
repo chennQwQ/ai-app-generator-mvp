@@ -99,6 +99,8 @@ export class OpenCodeAgentRunner implements AgentRunner {
         this.config.opencodeAgent,
         "--format",
         this.config.opencodeRunFormat,
+        "--dir",
+        request.workspacePath,
         request.prompt
       ];
 

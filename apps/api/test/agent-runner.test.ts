@@ -125,6 +125,8 @@ describe("OpenCodeAgentRunner", () => {
       "build",
       "--format",
       "json",
+      "--dir",
+      workspacePath,
       prompt
     ]);
     expect(recorded.args).not.toContain("--model");
@@ -190,6 +192,8 @@ describe("OpenCodeAgentRunner", () => {
         "build",
         "--format",
         "json",
+        "--dir",
+        workspacePath,
         prompt
       ]);
       expect(recorded.args).not.toContain("--model");

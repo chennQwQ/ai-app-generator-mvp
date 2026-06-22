@@ -5,9 +5,11 @@ import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PreviewInfo, ProjectEvent } from "@ai-app-generator/shared";
 import { loadConfig, type AppConfig } from "../src/config.js";
+import { openDatabase } from "../src/db/database.js";
 import { EventBus } from "../src/events/event-bus.js";
 import { PreviewManager } from "../src/preview/preview-manager.js";
-import { ProjectNotFoundError, type ProjectService } from "../src/projects/project-service.js";
+import { ProjectNotFoundError, ProjectService } from "../src/projects/project-service.js";
+import { registerProjectRoutes } from "../src/routes/projects.js";
 import { registerPreviewRoutes } from "../src/routes/preview.js";
 import { createServer } from "../src/server.js";
 
@@ -212,6 +214,96 @@ describe("preview routes", () => {
     expect(stops).toEqual(["project-1"]);
 
     await app.close();
+  });
+
+  it("updates project summary preview state when previews start and stop", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-preview-"));
+    const config = testConfig(tempDir, { PREVIEW_PORT_START: "7550" });
+    const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
+    const projects = new ProjectService(db, config);
+    const project = projects.createProject("Preview State App");
+    const workspacePath = projects.getWorkspacePath(project.id);
+    const bus = new EventBus();
+    const manager = new PreviewManager(
+      config,
+      bus,
+      { command: process.execPath, args: [path.join(workspacePath, "server.js")] },
+      (projectId, preview) => projects.updatePreview(projectId, preview)
+    );
+    const app = Fastify({ logger: false });
+    await registerProjectRoutes(app, projects);
+    await registerPreviewRoutes(app, projects, manager);
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/preview/start`
+    });
+    const runningProjectResponse = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}`
+    });
+    const stopResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/preview/stop`
+    });
+    const stoppedProjectResponse = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}`
+    });
+
+    expect(startResponse.statusCode).toBe(200);
+    expect(runningProjectResponse.json()).toMatchObject({
+      previewStatus: "running",
+      previewPort: 7550
+    });
+    expect(stopResponse.statusCode).toBe(200);
+    expect(stoppedProjectResponse.json()).toMatchObject({
+      previewStatus: "stopped",
+      previewPort: null
+    });
+
+    manager.stopAll();
+    await app.close();
+    db.close();
+  });
+
+  it("updates project summary preview state when a preview errors asynchronously", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-preview-"));
+    const config = testConfig(tempDir, { PREVIEW_PORT_START: "7560" });
+    const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
+    const projects = new ProjectService(db, config);
+    const project = projects.createProject("Preview Error App");
+    const workspacePath = projects.getWorkspacePath(project.id);
+    const exitScript = writeWorkspaceScript(
+      workspacePath,
+      "preview-error.js",
+      "process.stderr.write('dev failed\\n'); setTimeout(() => process.exit(1), 10);\n"
+    );
+    const bus = new EventBus();
+    const manager = new PreviewManager(
+      config,
+      bus,
+      { command: process.execPath, args: [exitScript] },
+      (projectId, preview) => projects.updatePreview(projectId, preview)
+    );
+    const errorStatus = waitForPreviewStatus(bus, project.id, "error");
+
+    manager.start(project.id, workspacePath);
+    await errorStatus;
+
+    expect(projects.getProject(project.id)).toMatchObject({
+      previewStatus: "error",
+      previewPort: 7560
+    });
+
+    manager.stop(project.id);
+
+    expect(projects.getProject(project.id)).toMatchObject({
+      previewStatus: "stopped",
+      previewPort: null
+    });
+
+    db.close();
   });
 
   it("returns 404 when starting a preview for a missing project", async () => {

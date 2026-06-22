@@ -71,6 +71,33 @@ describe("project routes", () => {
     db.close();
   });
 
+  it("resets active preview state on startup", () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
+    const projects = new ProjectService(db, config);
+    const project = projects.createProject("Preview Reset App");
+
+    projects.updatePreview(project.id, {
+      status: "running",
+      port: 6200,
+      url: "http://127.0.0.1:6200"
+    });
+    projects.resetActivePreviews();
+
+    expect(projects.getProject(project.id)).toMatchObject({
+      previewStatus: "stopped",
+      previewPort: null
+    });
+
+    db.close();
+  });
+
   it("returns a generic creation error when template copy fails", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
     const missingTemplateDir = path.join(tempDir, "missing-template");

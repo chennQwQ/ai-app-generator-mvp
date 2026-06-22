@@ -2,7 +2,7 @@ import { cpSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
-import type { ProjectSummary } from "@ai-app-generator/shared";
+import type { PreviewInfo, ProjectSummary } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 
 export class ProjectNotFoundError extends Error {
@@ -57,6 +57,28 @@ export class ProjectService {
     const row = this.db.prepare("select workspace_path from projects where id = ?").get(id) as { workspace_path: string } | undefined;
     if (!row) throw new ProjectNotFoundError(id);
     return row.workspace_path;
+  }
+
+  updatePreview(id: string, preview: PreviewInfo): ProjectSummary {
+    const result = this.db
+      .prepare(`
+        update projects
+        set preview_status = ?, preview_port = ?, updated_at = ?
+        where id = ?
+      `)
+      .run(preview.status, preview.port, new Date().toISOString(), id);
+    if (result.changes === 0) throw new ProjectNotFoundError(id);
+    return this.getProject(id);
+  }
+
+  resetActivePreviews(): void {
+    this.db
+      .prepare(`
+        update projects
+        set preview_status = 'stopped', preview_port = null, updated_at = ?
+        where preview_status in ('starting', 'running')
+      `)
+      .run(new Date().toISOString());
   }
 
   private slugify(name: string, id: string): string {

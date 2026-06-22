@@ -19,6 +19,7 @@ export interface PreviewCommandPlan {
 }
 
 export type PreviewCommandProvider = PreviewCommandSource | PreviewCommandPlan;
+export type PreviewStatusListener = (projectId: string, preview: PreviewInfo) => void;
 
 interface ActivePreview {
   process: ChildProcessWithoutNullStreams;
@@ -42,7 +43,8 @@ export class PreviewManager {
         command: "npm",
         args: ["run", "dev", "--", "--host", config.previewHost, "--port", String(port)]
       })
-    }
+    },
+    private readonly onStatusChange: PreviewStatusListener = () => {}
   ) {
     this.nextPort = config.previewPortStart;
     this.commandPlan = normalizeCommandProvider(commandProvider);
@@ -78,7 +80,7 @@ export class PreviewManager {
         preview,
         output: installOutput
       });
-      this.bus.publish({ type: "preview.status", projectId, preview });
+      this.publishStatus(projectId, preview);
       return preview;
     }
 
@@ -86,7 +88,7 @@ export class PreviewManager {
     const dev = this.spawnDevProcess(projectId, workspacePath, port, devPreview);
     this.previews.set(projectId, dev);
 
-    this.bus.publish({ type: "preview.status", projectId, preview: devPreview });
+    this.publishStatus(projectId, devPreview);
     return devPreview;
   }
 
@@ -95,8 +97,8 @@ export class PreviewManager {
     if (active) {
       this.previews.delete(projectId);
       killPreview(active.process);
-      this.bus.publish({ type: "preview.status", projectId, preview: stoppedPreview });
     }
+    this.publishStatus(projectId, stoppedPreview);
     return stoppedPreview;
   }
 
@@ -132,7 +134,7 @@ export class PreviewManager {
     const runningPreview: PreviewInfo = { ...preview, status: "running" };
     const dev = this.spawnDevProcess(projectId, workspacePath, port, runningPreview);
     this.previews.set(projectId, dev);
-    this.bus.publish({ type: "preview.status", projectId, preview: runningPreview });
+    this.publishStatus(projectId, runningPreview);
   }
 
   private markPreviewError(
@@ -149,7 +151,7 @@ export class PreviewManager {
     const errorPreview: PreviewInfo = errorOutput
       ? { ...preview, status: "error", output: errorOutput }
       : { ...preview, status: "error" };
-    this.bus.publish({ type: "preview.status", projectId, preview: errorPreview });
+    this.publishStatus(projectId, errorPreview);
   }
 
   private attachInstallHandlers(options: InstallHandlerOptions): void {
@@ -186,6 +188,15 @@ export class PreviewManager {
     child.on("close", () => {
       this.markPreviewError(projectId, child, preview, output);
     });
+  }
+
+  private publishStatus(projectId: string, preview: PreviewInfo): void {
+    try {
+      this.onStatusChange(projectId, preview);
+    } catch {
+      // Preview events should still reach connected clients if persistence fails.
+    }
+    this.bus.publish({ type: "preview.status", projectId, preview });
   }
 }
 

@@ -24,7 +24,10 @@ export async function createServer(config: AppConfig) {
   const files = new FileService();
   const conversations = new ConversationService(db);
   const runner = createAgentRunner(config, bus);
-  const previewManager = new PreviewManager(config, bus);
+  projects.resetActivePreviews();
+  const previewManager = new PreviewManager(config, bus, undefined, (projectId, preview) => {
+    projects.updatePreview(projectId, preview);
+  });
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);

@@ -97,6 +97,44 @@ Errors are displayed in a dismissible banner with a **Retry** button when applic
 
 A skeleton loading indicator appears on the first project load before data arrives from the API.
 
+## Phase 4 Features
+
+### Vue Template
+
+A second built-in template `vue-vite` is available alongside `react-vite`. The Vue template uses Vue 3 with Composition API, Vite, and TypeScript.
+
+### Template Selection
+
+The project creation form includes a dropdown to select the template. Supported templates:
+
+- **React (Vite + TypeScript)** — React 19, strict mode
+- **Vue (Vite + TypeScript)** — Vue 3, Composition API
+
+Template metadata is served at `GET /api/templates`.
+
+To create a project with a specific template via the API:
+
+```powershell
+Invoke-RestMethod -Method POST -Uri http://127.0.0.1:4317/api/projects -Body (@{ name = "My App"; template = "vue-vite" } | ConvertTo-Json) -ContentType "application/json"
+```
+
+### Tool Definitions
+
+Four structured tool definitions are exported from `@ai-app-generator/shared`:
+
+| Tool | Description |
+|------|-------------|
+| `shell` | Execute a shell command in the workspace |
+| `file_write` | Write content to a workspace file |
+| `npm_install` | Install npm dependencies |
+| `npm_build` | Run the project build script |
+
+Use `getToolDefinition(name)` to retrieve a tool by name.
+
+### Audit History
+
+Every agent run records tool calls in the `audit_logs` table. The audit log includes the tool name, parameters, exit code, and optional output. Audit records are served at `GET /api/projects/:id/audit`.
+
 ## Repository Boundary
 
 The parent course directory contains videos, PDFs, archives, extracted frames, and reference materials. Those parent course files, videos, and docs are outside this Git repository and must not be committed.

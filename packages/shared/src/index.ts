@@ -11,6 +11,7 @@ export interface ProjectSummary {
   status: ProjectStatus;
   previewStatus: PreviewStatus;
   previewPort: number | null;
+  previewUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

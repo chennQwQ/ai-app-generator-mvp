@@ -218,7 +218,7 @@ describe("preview routes", () => {
 
   it("updates project summary preview state when previews start and stop", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-preview-"));
-    const config = testConfig(tempDir, { PREVIEW_PORT_START: "7550" });
+    const config = testConfig(tempDir, { PREVIEW_HOST: "localhost", PREVIEW_PORT_START: "7550" });
     const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
     const projects = new ProjectService(db, config);
     const project = projects.createProject("Preview State App");
@@ -254,12 +254,14 @@ describe("preview routes", () => {
     expect(startResponse.statusCode).toBe(200);
     expect(runningProjectResponse.json()).toMatchObject({
       previewStatus: "running",
-      previewPort: 7550
+      previewPort: 7550,
+      previewUrl: "http://localhost:7550"
     });
     expect(stopResponse.statusCode).toBe(200);
     expect(stoppedProjectResponse.json()).toMatchObject({
       previewStatus: "stopped",
-      previewPort: null
+      previewPort: null,
+      previewUrl: null
     });
 
     manager.stopAll();

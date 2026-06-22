@@ -44,13 +44,13 @@ export class ProjectService {
   }
 
   listProjects(): ProjectSummary[] {
-    return this.db.prepare("select * from projects order by created_at desc").all().map(mapProject);
+    return this.db.prepare("select * from projects order by created_at desc").all().map((row) => this.mapProject(row));
   }
 
   getProject(id: string): ProjectSummary {
     const row = this.db.prepare("select * from projects where id = ?").get(id);
     if (!row) throw new ProjectNotFoundError(id);
-    return mapProject(row);
+    return this.mapProject(row);
   }
 
   getWorkspacePath(id: string): string {
@@ -85,17 +85,19 @@ export class ProjectService {
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     return `${base || "project"}-${id.slice(0, 6)}`;
   }
-}
 
-function mapProject(row: any): ProjectSummary {
-  return {
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    status: row.status,
-    previewStatus: row.preview_status,
-    previewPort: row.preview_port,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
+  private mapProject(row: any): ProjectSummary {
+    const previewPort = row.preview_port as number | null;
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: row.status,
+      previewStatus: row.preview_status,
+      previewPort,
+      previewUrl: previewPort === null ? null : `http://${this.config.previewHost}:${previewPort}`,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
 }

@@ -39,7 +39,7 @@ export async function createServer(config: AppConfig) {
   });
   app.get("/api/health", async () => ({ ok: true }));
   await registerProjectRoutes(app, projects);
-  await registerRunRoutes(app, projects, conversations);
+  await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);

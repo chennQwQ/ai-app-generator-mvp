@@ -21,14 +21,26 @@ export interface AgentRunResult {
 export interface AgentRunner {
   readonly command: string;
   run(request: AgentRunRequest): Promise<AgentRunResult>;
+  cancel(runId: string): void;
 }
 
 export class FakeAgentRunner implements AgentRunner {
   readonly command = "fake";
+  private readonly controllers = new Map<string, AbortController>();
 
   constructor(_config: AppConfig, _bus: EventBus) {}
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
+    const controller = new AbortController();
+    this.controllers.set(request.runId, controller);
+
+    await delay(0);
+
+    if (controller.signal.aborted) {
+      this.controllers.delete(request.runId);
+      return { exitCode: 1, errorMessage: "Cancelled" };
+    }
+
     emitLog(request, "event", "Fake agent started");
 
     const srcDir = path.join(request.workspacePath, "src");
@@ -36,8 +48,20 @@ export class FakeAgentRunner implements AgentRunner {
     writeFileSync(path.join(srcDir, "App.tsx"), renderFakeApp(request.prompt), "utf8");
 
     emitLog(request, "event", "Fake agent wrote src/App.tsx");
+
+    if (controller.signal.aborted) {
+      this.controllers.delete(request.runId);
+      return { exitCode: 1, errorMessage: "Cancelled" };
+    }
+
     emitLog(request, "event", "Fake agent completed");
+    this.controllers.delete(request.runId);
     return { exitCode: 0, errorMessage: null };
+  }
+
+  cancel(runId: string): void {
+    const controller = this.controllers.get(runId);
+    if (controller) controller.abort();
   }
 }
 
@@ -45,6 +69,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
   readonly command: string;
   private readonly commandName: string;
   private readonly commandArgs: string[];
+  private readonly processes = new Map<string, ReturnType<typeof spawnOpenCode>>();
 
   constructor(private readonly config: AppConfig, _bus: EventBus) {
     const commandParts = splitCommand(config.opencodeCommand);
@@ -73,11 +98,13 @@ export class OpenCodeAgentRunner implements AgentRunner {
       ];
 
       const child = spawnOpenCode(this.commandName, args, request.workspacePath);
+      this.processes.set(request.runId, child);
 
       let settled = false;
       const settle = (result: AgentRunResult) => {
         if (settled) return;
         settled = true;
+        this.processes.delete(request.runId);
         resolve(result);
       };
 
@@ -99,6 +126,11 @@ export class OpenCodeAgentRunner implements AgentRunner {
         });
       });
     });
+  }
+
+  cancel(runId: string): void {
+    const child = this.processes.get(runId);
+    if (child && !child.killed) child.kill();
   }
 }
 
@@ -216,6 +248,10 @@ function buildWindowsShimCommand(commandName: string, args: string[]): string {
 
 function quoteWindowsCommandArgument(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function splitCommand(command: string): string[] {

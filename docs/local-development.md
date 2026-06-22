@@ -58,6 +58,45 @@ Do not store DeepSeek or other provider credentials in this repository. Do not p
 - Start preview.
 - Confirm a preview URL is returned.
 
+## Phase 3 Features
+
+### Monaco File Editor
+
+File content is rendered with syntax highlighting via the Monaco editor. Supported languages are inferred from file extension:
+
+| Extension | Language |
+|-----------|----------|
+| `.tsx`, `.ts` | TypeScript |
+| `.jsx`, `.js` | JavaScript |
+| `.css` | CSS |
+| `.json` | JSON |
+| `.html` | HTML |
+| `.md` | Markdown |
+
+### Preview iFrame
+
+When a preview is running, click **Show Preview** to embed the app directly in the workspace panel. Click **Hide Preview** to collapse the iframe.
+
+### Project Delete
+
+Click the × button next to a project name to delete it. The workspace directory and all associated database records are removed.
+
+### Agent Run Cancel
+
+Active (queued or running) agent runs show a **Cancel** button in the Run History panel. Clicking it sends a cancel signal to the agent process and marks the run as cancelled.
+
+### Terminal-Style Log Panel
+
+The log panel auto-scrolls as new log lines stream in. Virtual terminal ANSI color codes render with proper coloring.
+
+### Error Handling
+
+Errors are displayed in a dismissible banner with a **Retry** button when applicable.
+
+### Loading State
+
+A skeleton loading indicator appears on the first project load before data arrives from the API.
+
 ## Repository Boundary
 
 The parent course directory contains videos, PDFs, archives, extracted frames, and reference materials. Those parent course files, videos, and docs are outside this Git repository and must not be committed.

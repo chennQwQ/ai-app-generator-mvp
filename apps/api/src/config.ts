@@ -8,6 +8,7 @@ export interface AppConfig {
   storageDir: string;
   workspaceDir: string;
   templateDir: string;
+  templatesDir: string;
   agentProvider: "fake" | "opencode";
   opencodeCommand: string;
   opencodeAgent: string;
@@ -42,6 +43,7 @@ export function loadConfig(
     storageDir: path.resolve(appRoot, env.STORAGE_DIR ?? "./storage"),
     workspaceDir: path.resolve(appRoot, env.WORKSPACE_DIR ?? "./workspaces"),
     templateDir: path.resolve(appRoot, env.TEMPLATE_DIR ?? "./templates/react-vite"),
+    templatesDir: path.resolve(appRoot, env.TEMPLATES_DIR ?? "./templates"),
     agentProvider: env.AGENT_PROVIDER === "opencode" ? "opencode" : "fake",
     opencodeCommand: env.OPENCODE_COMMAND ?? "opencode",
     opencodeAgent: env.OPENCODE_AGENT ?? "build",

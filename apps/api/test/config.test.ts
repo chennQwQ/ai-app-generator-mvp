@@ -18,6 +18,7 @@ describe("loadConfig", () => {
     expect(config.storageDir).toBe(path.join(repoRoot, "storage"));
     expect(config.workspaceDir).toBe(path.join(repoRoot, "workspaces"));
     expect(config.templateDir).toBe(path.join(repoRoot, "templates/react-vite"));
+    expect(config.templatesDir).toBe(path.join(repoRoot, "templates"));
   });
 
   it("uses APP_ROOT when supplied", () => {
@@ -28,5 +29,6 @@ describe("loadConfig", () => {
     expect(config.storageDir).toBe(path.join(appRoot, "storage"));
     expect(config.workspaceDir).toBe(path.join(appRoot, "workspaces"));
     expect(config.templateDir).toBe(path.join(appRoot, "templates/react-vite"));
+    expect(config.templatesDir).toBe(path.join(appRoot, "templates"));
   });
 });

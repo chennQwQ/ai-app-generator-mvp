@@ -222,6 +222,7 @@ function fakeConfig(root: string): AppConfig {
     storageDir: path.join(root, "storage"),
     workspaceDir: path.join(root, "workspaces"),
     templateDir: path.join(root, "template"),
+    templatesDir: path.join(root, "templates"),
     agentProvider: "fake",
     opencodeCommand: "opencode",
     opencodeAgent: "build",

@@ -1,6 +1,16 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
+import { createServer } from "../src/server.js";
+
+let tempDir: string | undefined;
+
+afterEach(() => {
+  if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+  tempDir = undefined;
+});
 
 describe("react vite template", () => {
   it("contains the files required for preview", () => {
@@ -19,5 +29,26 @@ describe("vue vite template", () => {
     expect(existsSync(path.join(root, "index.html"))).toBe(true);
     expect(existsSync(path.join(root, "src/App.vue"))).toBe(true);
     expect(existsSync(path.join(root, "src/main.ts"))).toBe(true);
+  });
+});
+
+describe("template list api", () => {
+  it("returns available templates with metadata", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-templates-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({ method: "GET", url: "/api/templates" });
+    expect(response.statusCode).toBe(200);
+    const templates = response.json();
+    expect(templates).toBeInstanceOf(Array);
+    expect(templates.length).toBeGreaterThanOrEqual(2);
+    expect(templates.find((t: any) => t.id === "react-vite")).toBeDefined();
+    expect(templates.find((t: any) => t.id === "vue-vite")).toBeDefined();
+    await app.close();
   });
 });

@@ -82,3 +82,9 @@ export type ProjectEvent =
 export function isTerminalRunStatus(status: AgentRunStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
 }
+
+export interface TemplateMeta {
+  id: string;
+  name: string;
+  description: string;
+}

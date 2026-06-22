@@ -1,0 +1,168 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { nanoid } from "nanoid";
+import type { AgentLogStream } from "@ai-app-generator/shared";
+import type { AppConfig } from "../config.js";
+import type { EventBus } from "../events/event-bus.js";
+
+export interface AgentRunRequest {
+  projectId: string;
+  runId: string;
+  workspacePath: string;
+  prompt: string;
+}
+
+export interface AgentRunResult {
+  exitCode: number;
+  errorMessage: string | null;
+}
+
+export interface AgentRunner {
+  readonly command: string;
+  run(request: AgentRunRequest): Promise<AgentRunResult>;
+}
+
+export class FakeAgentRunner implements AgentRunner {
+  readonly command = "fake";
+
+  constructor(private readonly config: AppConfig, private readonly bus: EventBus) {}
+
+  async run(request: AgentRunRequest): Promise<AgentRunResult> {
+    this.publishLog(request, "event", "Fake agent started");
+
+    const srcDir = path.join(request.workspacePath, "src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(path.join(srcDir, "App.tsx"), renderFakeApp(request.prompt), "utf8");
+
+    this.publishLog(request, "event", "Fake agent wrote src/App.tsx");
+    this.publishLog(request, "event", "Fake agent completed");
+    return { exitCode: 0, errorMessage: null };
+  }
+
+  private publishLog(request: AgentRunRequest, stream: AgentLogStream, content: string): void {
+    this.bus.publish({
+      type: "run.log",
+      projectId: request.projectId,
+      log: {
+        id: nanoid(),
+        agentRunId: request.runId,
+        stream,
+        content,
+        sequence: 0,
+        createdAt: new Date().toISOString()
+      }
+    });
+  }
+}
+
+export class OpenCodeAgentRunner implements AgentRunner {
+  readonly command: string;
+  private readonly commandName: string;
+  private readonly commandArgs: string[];
+
+  constructor(private readonly config: AppConfig, private readonly bus: EventBus) {
+    const commandParts = splitCommand(config.opencodeCommand);
+    this.commandName = commandParts[0] ?? config.opencodeCommand;
+    this.commandArgs = commandParts.slice(1);
+    this.command = [
+      ...commandParts,
+      "run",
+      "--agent",
+      config.opencodeAgent,
+      "--format",
+      config.opencodeRunFormat
+    ].join(" ");
+  }
+
+  run(request: AgentRunRequest): Promise<AgentRunResult> {
+    return new Promise((resolve) => {
+      const args = [
+        ...this.commandArgs,
+        "run",
+        "--agent",
+        this.config.opencodeAgent,
+        "--format",
+        this.config.opencodeRunFormat,
+        request.prompt
+      ];
+
+      const child = spawn(this.commandName, args, {
+        cwd: request.workspacePath,
+        windowsHide: true
+      });
+
+      let settled = false;
+      const settle = (result: AgentRunResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      child.stdout.on("data", (chunk: Buffer) => {
+        this.publishLog(request, "stdout", chunk.toString());
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        this.publishLog(request, "stderr", chunk.toString());
+      });
+      child.on("error", (error) => {
+        this.publishLog(request, "stderr", error.message);
+        settle({ exitCode: 1, errorMessage: error.message });
+      });
+      child.on("close", (code) => {
+        const exitCode = code ?? 1;
+        settle({
+          exitCode,
+          errorMessage: exitCode === 0 ? null : `OpenCode exited with code ${exitCode}`
+        });
+      });
+    });
+  }
+
+  private publishLog(request: AgentRunRequest, stream: AgentLogStream, content: string): void {
+    this.bus.publish({
+      type: "run.log",
+      projectId: request.projectId,
+      log: {
+        id: nanoid(),
+        agentRunId: request.runId,
+        stream,
+        content,
+        sequence: 0,
+        createdAt: new Date().toISOString()
+      }
+    });
+  }
+}
+
+export function createAgentRunner(config: AppConfig, bus: EventBus): AgentRunner {
+  return config.agentProvider === "opencode"
+    ? new OpenCodeAgentRunner(config, bus)
+    : new FakeAgentRunner(config, bus);
+}
+
+function renderFakeApp(prompt: string): string {
+  return `const prompt = ${tsxStringLiteral(prompt)};
+
+export default function App() {
+  return (
+    <main>
+      <h1>Generated App</h1>
+      <p>{prompt}</p>
+    </main>
+  );
+}
+`;
+}
+
+function tsxStringLiteral(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
+function splitCommand(command: string): string[] {
+  const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+  return parts.map((part) => part.replace(/^"|"$/g, ""));
+}

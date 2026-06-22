@@ -73,7 +73,7 @@ export class FileService {
     const entries = await readdir(currentPath, { withFileTypes: true });
     const nodes = await Promise.all(
       entries
-        .filter((entry) => !ignoredNames.has(entry.name))
+        .filter((entry) => !isIgnoredName(entry.name))
         .map(async (entry): Promise<FileNode | null> => {
           const entryPath = path.join(currentPath, entry.name);
           const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
@@ -119,7 +119,11 @@ function hasIgnoredPathComponent(relativePath: string): boolean {
   return relativePath
     .split(/[\\/]+/)
     .filter(Boolean)
-    .some((component) => ignoredNames.has(component));
+    .some(isIgnoredName);
+}
+
+function isIgnoredName(name: string): boolean {
+  return ignoredNames.has(name.toLowerCase());
 }
 
 function isAbsolutePath(filePath: string): boolean {

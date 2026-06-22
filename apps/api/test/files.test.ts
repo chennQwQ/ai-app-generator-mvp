@@ -43,6 +43,17 @@ describe("FileService", () => {
     ]));
   });
 
+  it("excludes ignored tree entries with case variants", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    createWorkspaceWithCaseVariantIgnoredEntries(workspacePath);
+    const service = new FileService();
+
+    const tree = await service.getTree(workspacePath);
+
+    expect(flattenTree(tree)).toEqual(["src/", "src/App.tsx"]);
+  });
+
   it("reads UTF-8 file content by workspace-relative path", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-files-"));
     const workspacePath = path.join(tempDir, "workspace");
@@ -54,8 +65,11 @@ describe("FileService", () => {
 
   it.each([
     ".env",
+    ".ENV",
     "node_modules/hidden.js",
+    "NODE_MODULES/hidden.js",
     ".git/config",
+    ".GIT/config",
     "dist/app.js",
     ".cache/state.json",
     "coverage/index.html"
@@ -212,6 +226,32 @@ describe("file routes", () => {
       const response = await app.inject({
         method: "GET",
         url: `/api/projects/${project.id}/files/content?path=${encodeURIComponent(".env")}`
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ message: "Invalid file path" });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns 400 for direct reads of ignored files with case variants", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-file-routes-"));
+    const config = testConfig(tempDir);
+    const app = await createServer(config);
+
+    try {
+      const projectResponse = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        payload: { name: "Ignored Case App" }
+      });
+      const project = projectResponse.json();
+      writeFileSync(path.join(config.workspaceDir, project.id, ".env"), "SECRET=value\n");
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/projects/${project.id}/files/content?path=${encodeURIComponent(".ENV")}`
       });
 
       expect(response.statusCode).toBe(400);
@@ -386,6 +426,22 @@ function createWorkspace(workspacePath: string): void {
   writeFileSync(path.join(workspacePath, ".env"), "SECRET=value\n");
   writeFileSync(path.join(workspacePath, ".cache", "state.json"), "{}\n");
   writeFileSync(path.join(workspacePath, "coverage", "index.html"), "");
+}
+
+function createWorkspaceWithCaseVariantIgnoredEntries(workspacePath: string): void {
+  mkdirSync(path.join(workspacePath, "src"), { recursive: true });
+  mkdirSync(path.join(workspacePath, "NODE_MODULES"), { recursive: true });
+  mkdirSync(path.join(workspacePath, ".GIT"), { recursive: true });
+  mkdirSync(path.join(workspacePath, "DIST"), { recursive: true });
+  mkdirSync(path.join(workspacePath, ".CACHE"), { recursive: true });
+  mkdirSync(path.join(workspacePath, "COVERAGE"), { recursive: true });
+  writeFileSync(path.join(workspacePath, "src", "App.tsx"), "export default function App() {}\n");
+  writeFileSync(path.join(workspacePath, "NODE_MODULES", "hidden.js"), "");
+  writeFileSync(path.join(workspacePath, ".GIT", "config"), "");
+  writeFileSync(path.join(workspacePath, "DIST", "app.js"), "");
+  writeFileSync(path.join(workspacePath, ".ENV"), "SECRET=value\n");
+  writeFileSync(path.join(workspacePath, ".CACHE", "state.json"), "{}\n");
+  writeFileSync(path.join(workspacePath, "COVERAGE", "index.html"), "");
 }
 
 function flattenTree(nodes: FileNode[]): string[] {

@@ -87,6 +87,10 @@ describe("App", () => {
           return jsonResponse([]);
         }
 
+        if (_init?.method === "DELETE") {
+          return jsonResponse({ ok: true });
+        }
+
         return jsonResponse({ message: "Unhandled test URL" }, 404);
       })
     );

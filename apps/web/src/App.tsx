@@ -11,6 +11,7 @@ import type {
 import {
   cancelRun,
   createProject,
+  deleteProject,
   getFileContent,
   getFiles,
   getRunLogs,
@@ -271,6 +272,20 @@ export function App() {
     }
   }
 
+  async function handleDeleteProject(projectId: string, event: React.MouseEvent) {
+    event.stopPropagation();
+    try {
+      setError(null);
+      await deleteProject(projectId);
+      setProjects((current) => current.filter((p) => p.id !== projectId));
+      if (activeProjectIdRef.current === projectId) {
+        setActiveProjectId(null);
+      }
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
   return (
     <main className="studio-shell">
       <header className="studio-header">
@@ -326,6 +341,14 @@ export function App() {
                 <small>
                   {project.status} / {project.previewStatus}
                 </small>
+                <span
+                  className="delete-project-btn"
+                  onClick={(event) => handleDeleteProject(project.id, event)}
+                  role="button"
+                  aria-label="Delete project"
+                >
+                  ×
+                </span>
               </button>
             ))}
             {projects.length === 0 ? <p className="empty-state">No projects yet.</p> : null}

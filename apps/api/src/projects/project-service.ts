@@ -81,6 +81,13 @@ export class ProjectService {
       .run(new Date().toISOString());
   }
 
+  deleteProject(id: string): void {
+    const row = this.db.prepare("select workspace_path from projects where id = ?").get(id) as { workspace_path: string } | undefined;
+    if (!row) throw new ProjectNotFoundError(id);
+    this.db.prepare("delete from projects where id = ?").run(id);
+    rmSync(row.workspace_path, { recursive: true, force: true });
+  }
+
   private slugify(name: string, id: string): string {
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     return `${base || "project"}-${id.slice(0, 6)}`;

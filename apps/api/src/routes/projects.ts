@@ -40,4 +40,18 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
       return reply.code(500).send({ message: "Project creation failed" });
     }
   });
+
+  app.delete("/api/projects/:projectId", async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    try {
+      projects.deleteProject(projectId);
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof ProjectNotFoundError) {
+        return reply.code(404).send({ message: "Project not found" });
+      }
+      request.log.error({ err: error }, "Project deletion failed");
+      return reply.code(500).send({ message: "Project deletion failed" });
+    }
+  });
 }

@@ -217,4 +217,47 @@ describe("project routes", () => {
 
     await app.close();
   });
+
+  it("deletes a project and returns 200", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const app = await createServer(config);
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Delete Me" }
+    });
+    const project = createRes.json();
+
+    const deleteRes = await app.inject({
+      method: "DELETE",
+      url: `/api/projects/${project.id}`
+    });
+    expect(deleteRes.statusCode).toBe(200);
+
+    const listRes = await app.inject({ method: "GET", url: "/api/projects" });
+    expect(listRes.json()).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it("returns 404 when deleting a nonexistent project", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+    });
+    const app = await createServer(config);
+
+    const res = await app.inject({ method: "DELETE", url: "/api/projects/nonexistent" });
+    expect(res.statusCode).toBe(404);
+
+    await app.close();
+  });
 });

@@ -445,6 +445,22 @@ a {
   background: #b5332a;
 }
 
+.delete-project-btn {
+  background: transparent;
+  border: 0;
+  color: #a1abb5;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  margin-left: auto;
+  padding: 0 2px;
+}
+
+.delete-project-btn:hover {
+  color: #d9443a;
+}
+
 @media (max-width: 1180px) {
   .studio-grid {
     grid-template-columns: minmax(220px, 280px) 1fr;

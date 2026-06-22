@@ -81,6 +81,13 @@ export async function cancelRun(projectId: string, runId: string): Promise<{ run
   );
 }
 
+export async function deleteProject(projectId: string): Promise<void> {
+  await request<{ ok: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}`,
+    { method: "DELETE" }
+  );
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = init.body
     ? {

@@ -69,22 +69,28 @@ describe("FakeAgentRunner", () => {
 });
 
 describe("OpenCodeAgentRunner", () => {
-  it.skipIf(process.platform !== "win32")("runs a Windows .cmd shim in the workspace without a model flag", async () => {
+  it.skipIf(process.platform !== "win32")("runs a Windows .cmd shim without shell-injecting the prompt", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-"));
     const workspacePath = path.join(tempDir, "workspace");
     mkdirSync(workspacePath);
     const commandPath = path.join(tempDir, "opencode.cmd");
+    const cliPath = path.join(tempDir, "opencode-shim-target.cjs");
     const recordPath = path.join(tempDir, "argv.txt");
     writeFileSync(
-      commandPath,
+      cliPath,
       [
-        "@echo off",
-        `echo cwd=%CD%> "${recordPath}"`,
-        `echo args=%*>> "${recordPath}"`,
-        "echo shim stdout"
-      ].join("\r\n"),
+        "const fs = require('node:fs');",
+        `fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));`,
+        "console.log('shim stdout');"
+      ].join("\n"),
       "utf8"
     );
+    writeFileSync(
+      commandPath,
+      ["@echo off", `node "${cliPath}" %*`].join("\r\n"),
+      "utf8"
+    );
+    const prompt = "Build from shim & echo INJECTED | more < input > output with \"quotes\"";
     const runner = new OpenCodeAgentRunner(
       {
         ...fakeConfig(tempDir),
@@ -99,16 +105,28 @@ describe("OpenCodeAgentRunner", () => {
       projectId: "project-1",
       runId: "run-1",
       workspacePath,
-      prompt: "Build from shim",
+      prompt,
       onLog: (_stream, content) => logs.push(content)
     });
 
     expect(result).toEqual({ exitCode: 0, errorMessage: null });
     expect(logs.join("")).toContain("shim stdout");
-    const recorded = readFileSync(recordPath, "utf8");
-    expect(recorded).toContain(`cwd=${workspacePath}`);
-    expect(recorded).toContain("args=--shim-flag run --agent build --format json Build from shim");
-    expect(recorded).not.toContain("--model");
+    expect(logs.join("")).not.toContain("INJECTED");
+    const recorded = JSON.parse(readFileSync(recordPath, "utf8")) as {
+      cwd: string;
+      args: string[];
+    };
+    expect(recorded.cwd).toBe(workspacePath);
+    expect(recorded.args).toEqual([
+      "--shim-flag",
+      "run",
+      "--agent",
+      "build",
+      "--format",
+      "json",
+      prompt
+    ]);
+    expect(recorded.args).not.toContain("--model");
   });
 });
 

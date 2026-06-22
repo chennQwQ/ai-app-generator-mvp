@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentLogStream } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 import type { EventBus } from "../events/event-bus.js";
@@ -72,11 +72,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
         request.prompt
       ];
 
-      const child = spawn(this.commandName, args, {
-        cwd: request.workspacePath,
-        shell: process.platform === "win32",
-        windowsHide: true
-      });
+      const child = spawnOpenCode(this.commandName, args, request.workspacePath);
 
       let settled = false;
       const settle = (result: AgentRunResult) => {
@@ -139,6 +135,45 @@ function emitLog(request: AgentRunRequest, stream: AgentLogStream, content: stri
   } catch {
     // Log sinks are best-effort; runner execution should not fail because a subscriber failed.
   }
+}
+
+function spawnOpenCode(
+  commandName: string,
+  args: string[],
+  workspacePath: string
+): ChildProcessWithoutNullStreams {
+  if (process.platform === "win32" && isWindowsCommandShim(commandName)) {
+    return spawn(
+      process.env.ComSpec ?? "cmd.exe",
+      ["/d", "/s", "/c", buildWindowsShimCommand(commandName, args)],
+      {
+        cwd: workspacePath,
+        windowsHide: true,
+        windowsVerbatimArguments: true
+      }
+    );
+  }
+
+  return spawn(commandName, args, {
+    cwd: workspacePath,
+    windowsHide: true
+  });
+}
+
+function isWindowsCommandShim(commandName: string): boolean {
+  const extension = path.extname(commandName).toLowerCase();
+  return extension === ".cmd" || extension === ".bat";
+}
+
+function buildWindowsShimCommand(commandName: string, args: string[]): string {
+  const command = [commandName, ...args].map(quoteWindowsCommandArgument).join(" ");
+  return `"${command}"`;
+}
+
+function quoteWindowsCommandArgument(value: string): string {
+  return `"${value
+    .replace(/(\\*)"/g, '$1$1\\"')
+    .replace(/(\\+)$/g, "$1$1")}"`;
 }
 
 function splitCommand(command: string): string[] {

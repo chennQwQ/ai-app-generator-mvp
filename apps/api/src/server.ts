@@ -10,6 +10,7 @@ import { EventBus } from "./events/event-bus.js";
 import { ProjectService } from "./projects/project-service.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerProjectRoutes } from "./routes/projects.js";
+import { registerWebSocketRoutes } from "./routes/ws.js";
 
 export async function createServer(config: AppConfig) {
   const app = Fastify({ logger: true });
@@ -26,6 +27,7 @@ export async function createServer(config: AppConfig) {
   app.get("/api/health", async () => ({ ok: true }));
   await registerProjectRoutes(app, projects);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
+  await registerWebSocketRoutes(app, bus);
 
   return app;
 }

@@ -19,6 +19,12 @@ git status
 
 Do not run `git add` or `git commit` from the parent course directory.
 
+Parent course files, videos, and docs are outside this Git repository boundary and must not be committed.
+
+## Local Development
+
+See [docs/local-development.md](docs/local-development.md) for the local workflow with the fake agent and OpenCode provider.
+
 ## Planned Structure
 
 ```text

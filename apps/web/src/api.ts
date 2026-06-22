@@ -64,12 +64,16 @@ export async function stopPreview(projectId: string): Promise<PreviewInfo> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = init.body
+    ? {
+        "Content-Type": "application/json",
+        ...init.headers
+      }
+    : init.headers;
+
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers
-    }
+    headers
   });
 
   if (!response.ok) {

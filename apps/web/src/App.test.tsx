@@ -29,7 +29,7 @@ describe("App", () => {
     vi.stubGlobal("WebSocket", MockWebSocket);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         const pathname = new URL(url).pathname;
 
@@ -257,6 +257,26 @@ describe("App", () => {
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText("Project event stream disconnected.")).not.toBeInTheDocument();
+  });
+
+  it("starts preview without sending an empty JSON content type", async () => {
+    responseOverrides.set("/api/projects/project-1/preview/start", () =>
+      jsonResponse({ status: "running", port: 6200, url: "http://127.0.0.1:6200" })
+    );
+
+    render(<App />);
+
+    await screen.findByRole("heading", { level: 2, name: "Demo Project" });
+    fireEvent.click(screen.getByRole("button", { name: /start preview/i }));
+
+    expect(
+      await screen.findByRole("link", { name: "http://127.0.0.1:6200" })
+    ).toBeInTheDocument();
+    const startCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).endsWith("/api/projects/project-1/preview/start"));
+    expect(startCall?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    expect((startCall?.[1]?.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
   });
 
   it("stops a running preview through the preview API", async () => {

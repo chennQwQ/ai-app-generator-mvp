@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { nanoid } from "nanoid";
 import type { AgentLogStream } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 import type { EventBus } from "../events/event-bus.js";
@@ -11,6 +10,7 @@ export interface AgentRunRequest {
   runId: string;
   workspacePath: string;
   prompt: string;
+  onLog?: (stream: AgentLogStream, content: string) => void;
 }
 
 export interface AgentRunResult {
@@ -26,33 +26,18 @@ export interface AgentRunner {
 export class FakeAgentRunner implements AgentRunner {
   readonly command = "fake";
 
-  constructor(private readonly config: AppConfig, private readonly bus: EventBus) {}
+  constructor(_config: AppConfig, _bus: EventBus) {}
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
-    this.publishLog(request, "event", "Fake agent started");
+    emitLog(request, "event", "Fake agent started");
 
     const srcDir = path.join(request.workspacePath, "src");
     mkdirSync(srcDir, { recursive: true });
     writeFileSync(path.join(srcDir, "App.tsx"), renderFakeApp(request.prompt), "utf8");
 
-    this.publishLog(request, "event", "Fake agent wrote src/App.tsx");
-    this.publishLog(request, "event", "Fake agent completed");
+    emitLog(request, "event", "Fake agent wrote src/App.tsx");
+    emitLog(request, "event", "Fake agent completed");
     return { exitCode: 0, errorMessage: null };
-  }
-
-  private publishLog(request: AgentRunRequest, stream: AgentLogStream, content: string): void {
-    this.bus.publish({
-      type: "run.log",
-      projectId: request.projectId,
-      log: {
-        id: nanoid(),
-        agentRunId: request.runId,
-        stream,
-        content,
-        sequence: 0,
-        createdAt: new Date().toISOString()
-      }
-    });
   }
 }
 
@@ -61,7 +46,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
   private readonly commandName: string;
   private readonly commandArgs: string[];
 
-  constructor(private readonly config: AppConfig, private readonly bus: EventBus) {
+  constructor(private readonly config: AppConfig, _bus: EventBus) {
     const commandParts = splitCommand(config.opencodeCommand);
     this.commandName = commandParts[0] ?? config.opencodeCommand;
     this.commandArgs = commandParts.slice(1);
@@ -89,6 +74,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
 
       const child = spawn(this.commandName, args, {
         cwd: request.workspacePath,
+        shell: process.platform === "win32",
         windowsHide: true
       });
 
@@ -100,13 +86,13 @@ export class OpenCodeAgentRunner implements AgentRunner {
       };
 
       child.stdout.on("data", (chunk: Buffer) => {
-        this.publishLog(request, "stdout", chunk.toString());
+        emitLog(request, "stdout", chunk.toString());
       });
       child.stderr.on("data", (chunk: Buffer) => {
-        this.publishLog(request, "stderr", chunk.toString());
+        emitLog(request, "stderr", chunk.toString());
       });
       child.on("error", (error) => {
-        this.publishLog(request, "stderr", error.message);
+        emitLog(request, "stderr", error.message);
         settle({ exitCode: 1, errorMessage: error.message });
       });
       child.on("close", (code) => {
@@ -116,21 +102,6 @@ export class OpenCodeAgentRunner implements AgentRunner {
           errorMessage: exitCode === 0 ? null : `OpenCode exited with code ${exitCode}`
         });
       });
-    });
-  }
-
-  private publishLog(request: AgentRunRequest, stream: AgentLogStream, content: string): void {
-    this.bus.publish({
-      type: "run.log",
-      projectId: request.projectId,
-      log: {
-        id: nanoid(),
-        agentRunId: request.runId,
-        stream,
-        content,
-        sequence: 0,
-        createdAt: new Date().toISOString()
-      }
     });
   }
 }
@@ -160,6 +131,14 @@ function tsxStringLiteral(value: string): string {
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
     .replace(/&/g, "\\u0026");
+}
+
+function emitLog(request: AgentRunRequest, stream: AgentLogStream, content: string): void {
+  try {
+    request.onLog?.(stream, content);
+  } catch {
+    // Log sinks are best-effort; runner execution should not fail because a subscriber failed.
+  }
 }
 
 function splitCommand(command: string): string[] {

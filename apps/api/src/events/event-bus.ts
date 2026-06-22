@@ -26,7 +26,11 @@ export class EventBus {
     if (!projectListeners) return;
 
     for (const listener of [...projectListeners]) {
-      listener(event);
+      try {
+        listener(event);
+      } catch {
+        // Listener failures must not block other subscribers.
+      }
     }
   }
 }

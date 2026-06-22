@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { AgentRun } from "@ai-app-generator/shared";
+import type { AgentLogStream, AgentRun } from "@ai-app-generator/shared";
 import { ProjectNotFoundError, type ProjectService } from "../projects/project-service.js";
 import {
   ActiveAgentRunError,
-  ConversationNotFoundError,
   type ConversationService
 } from "../conversations/conversation-service.js";
 import type { AgentRunner } from "../agent/agent-runner.js";
@@ -23,7 +22,7 @@ export async function registerMessageRoutes(
       projects.getWorkspacePath(projectId);
       return conversations.listMessages(projectId);
     } catch (error) {
-      if (isNotFoundError(error)) {
+      if (isProjectNotFoundError(error)) {
         return reply.code(404).send({ message: "Project not found" });
       }
 
@@ -45,7 +44,7 @@ export async function registerMessageRoutes(
       const runningRun = conversations.updateAgentRunStatus(created.run.id, "running");
       created = { message: created.message, run: runningRun };
     } catch (error) {
-      if (isNotFoundError(error)) {
+      if (isProjectNotFoundError(error)) {
         return reply.code(404).send({ message: "Project not found" });
       }
       if (error instanceof ActiveAgentRunError) {
@@ -82,37 +81,80 @@ function startRun(options: {
   runner: AgentRunner;
   bus: EventBus;
 }): void {
-  const unsubscribe = options.bus.subscribe(options.projectId, (event) => {
-    if (event.type === "run.log" && event.log.agentRunId === options.run.id) {
-      options.conversations.recordAgentLog(event.log.agentRunId, event.log.stream, event.log.content);
-    }
-  });
-
   void (async () => {
     try {
       const result = await options.runner.run({
         projectId: options.projectId,
         runId: options.run.id,
         workspacePath: options.workspacePath,
-        prompt: options.prompt
+        prompt: options.prompt,
+        onLog: (stream, content) => recordAndPublishLog(options, stream, content)
       });
       const status = result.exitCode === 0 ? "succeeded" : "failed";
-      const completedRun = options.conversations.updateAgentRunStatus(options.run.id, status, result);
-      options.bus.publish({ type: "run.status", projectId: options.projectId, run: completedRun });
+      const completedRun = safeUpdateAgentRunStatus(options, status, result);
+      if (completedRun) {
+        safePublish(options, { type: "run.status", projectId: options.projectId, run: completedRun });
+      }
       if (status === "succeeded") {
-        options.bus.publish({ type: "files.changed", projectId: options.projectId });
+        safePublish(options, { type: "files.changed", projectId: options.projectId });
       }
     } catch (error) {
-      options.app.log.error({ err: error }, "Agent run failed");
-      const failedRun = options.conversations.updateAgentRunStatus(options.run.id, "failed", {
+      safeLogError(options, error, "Agent run failed");
+      const failedRun = safeUpdateAgentRunStatus(options, "failed", {
         exitCode: 1,
         errorMessage: "Agent run failed"
       });
-      options.bus.publish({ type: "run.status", projectId: options.projectId, run: failedRun });
-    } finally {
-      unsubscribe();
+      if (failedRun) {
+        safePublish(options, { type: "run.status", projectId: options.projectId, run: failedRun });
+      }
     }
-  })();
+  })().catch((error) => {
+    safeLogError(options, error, "Background agent task failed");
+  });
+}
+
+type StartRunOptions = Parameters<typeof startRun>[0];
+
+function recordAndPublishLog(
+  options: StartRunOptions,
+  stream: AgentLogStream,
+  content: string
+): void {
+  try {
+    const log = options.conversations.recordAgentLog(options.run.id, stream, content);
+    safePublish(options, { type: "run.log", projectId: options.projectId, log });
+  } catch (error) {
+    safeLogError(options, error, "Agent log recording failed");
+  }
+}
+
+function safeUpdateAgentRunStatus(
+  options: StartRunOptions,
+  status: AgentRun["status"],
+  fields: { exitCode?: number | null; errorMessage?: string | null } = {}
+): AgentRun | null {
+  try {
+    return options.conversations.updateAgentRunStatus(options.run.id, status, fields);
+  } catch (error) {
+    safeLogError(options, error, "Agent run status update failed");
+    return null;
+  }
+}
+
+function safePublish(options: StartRunOptions, event: Parameters<EventBus["publish"]>[0]): void {
+  try {
+    options.bus.publish(event);
+  } catch (error) {
+    safeLogError(options, error, "Project event publish failed");
+  }
+}
+
+function safeLogError(options: StartRunOptions, error: unknown, message: string): void {
+  try {
+    options.app.log.error({ err: error }, message);
+  } catch {
+    // Background tasks must never reject because failure reporting failed.
+  }
 }
 
 function parseContent(body: unknown): string | null {
@@ -123,6 +165,6 @@ function parseContent(body: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
-function isNotFoundError(error: unknown): boolean {
-  return error instanceof ProjectNotFoundError || error instanceof ConversationNotFoundError;
+function isProjectNotFoundError(error: unknown): boolean {
+  return error instanceof ProjectNotFoundError;
 }

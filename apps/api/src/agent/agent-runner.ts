@@ -22,6 +22,7 @@ export interface AgentRunner {
   readonly command: string;
   run(request: AgentRunRequest): Promise<AgentRunResult>;
   cancel(runId: string): void;
+  healthCheck(): Promise<{ ok: boolean; reason?: string }>;
 }
 
 export class FakeAgentRunner implements AgentRunner {
@@ -62,6 +63,10 @@ export class FakeAgentRunner implements AgentRunner {
   cancel(runId: string): void {
     const controller = this.controllers.get(runId);
     if (controller) controller.abort();
+  }
+
+  async healthCheck(): Promise<{ ok: boolean }> {
+    return { ok: true };
   }
 }
 
@@ -131,6 +136,26 @@ export class OpenCodeAgentRunner implements AgentRunner {
   cancel(runId: string): void {
     const child = this.processes.get(runId);
     if (child && !child.killed) child.kill();
+  }
+
+  async healthCheck(): Promise<{ ok: boolean; reason?: string }> {
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(this.commandName, ["--version"], {
+          windowsHide: true,
+          timeout: 5000
+        });
+        child.on("error", (error) => {
+          resolve({ ok: false, reason: error.message });
+        });
+        child.on("close", (code) => {
+          resolve(code === 0 ? { ok: true } : { ok: false, reason: `Exited with code ${code}` });
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        resolve({ ok: false, reason: message });
+      }
+    });
   }
 }
 

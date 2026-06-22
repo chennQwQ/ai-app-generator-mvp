@@ -22,7 +22,7 @@ describe("health route", () => {
     }));
     const response = await app.inject({ method: "GET", url: "/api/health" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    expect(response.json()).toMatchObject({ ok: true, agent: { ok: true } });
     await app.close();
   });
 });

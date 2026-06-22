@@ -37,7 +37,10 @@ export async function createServer(config: AppConfig) {
     previewManager.stopAll();
     db.close();
   });
-  app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/health", async () => {
+    const agent = await runner.healthCheck();
+    return { ok: true, agent };
+  });
   await registerProjectRoutes(app, projects);
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);

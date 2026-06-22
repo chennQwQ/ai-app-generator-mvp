@@ -430,6 +430,21 @@ a {
   flex-shrink: 0;
 }
 
+.cancel-run-btn {
+  background: #d9443a;
+  border: 0;
+  border-radius: 3px;
+  color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.cancel-run-btn:hover {
+  background: #b5332a;
+}
+
 @media (max-width: 1180px) {
   .studio-grid {
     grid-template-columns: minmax(220px, 280px) 1fr;

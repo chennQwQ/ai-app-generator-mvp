@@ -9,6 +9,7 @@ import type {
   ProjectSummary
 } from "@ai-app-generator/shared";
 import {
+  cancelRun,
   createProject,
   getFileContent,
   getFiles,
@@ -258,6 +259,18 @@ export function App() {
     }
   }
 
+  async function handleCancelRun(runId: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+
+    try {
+      setError(null);
+      await cancelRun(projectId, runId);
+    } catch (caught) {
+      if (activeProjectIdRef.current === projectId) setError(errorMessage(caught));
+    }
+  }
+
   return (
     <main className="studio-shell">
       <header className="studio-header">
@@ -397,6 +410,15 @@ export function App() {
                   <span className={`status-dot status-${run.status}`} />
                   <span className="run-summary">{run.prompt.slice(0, 60)}{run.prompt.length > 60 ? "…" : ""}</span>
                   <small className="run-status">{run.status}</small>
+                  {(run.status === "queued" || run.status === "running") ? (
+                    <button
+                      className="cancel-run-btn"
+                      onClick={(e) => { e.stopPropagation(); handleCancelRun(run.id); }}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
                 </button>
               ))}
               {runs.length === 0 ? <p className="empty-state">No runs yet.</p> : null}

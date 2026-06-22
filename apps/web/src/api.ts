@@ -74,6 +74,13 @@ export async function getRunLogs(projectId: string, runId: string): Promise<Agen
   );
 }
 
+export async function cancelRun(projectId: string, runId: string): Promise<{ run: AgentRun }> {
+  return request<{ run: AgentRun }>(
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST" }
+  );
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = init.body
     ? {

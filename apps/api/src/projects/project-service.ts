@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
 import type { PreviewInfo, ProjectSummary } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
+import type { TemplateService } from "../templates/template-service.js";
 
 export class ProjectNotFoundError extends Error {
   constructor(id: string) {
@@ -13,17 +14,22 @@ export class ProjectNotFoundError extends Error {
 }
 
 export class ProjectService {
-  constructor(private readonly db: Database.Database, private readonly config: AppConfig) {}
+  constructor(
+    private readonly db: Database.Database,
+    private readonly config: AppConfig,
+    private readonly templates: TemplateService
+  ) {}
 
-  createProject(name: string): ProjectSummary {
+  createProject(name: string, template = "react-vite"): ProjectSummary {
     const now = new Date().toISOString();
     const id = nanoid();
     const slug = this.slugify(name, id);
     const workspacePath = path.join(this.config.workspaceDir, id);
+    const templateDir = this.templates.resolveDir(template);
 
     mkdirSync(this.config.workspaceDir, { recursive: true });
     try {
-      cpSync(this.config.templateDir, workspacePath, { recursive: true });
+      cpSync(templateDir, workspacePath, { recursive: true });
       this.db.transaction(() => {
         this.db.prepare(`
           insert into projects (id, name, slug, workspace_path, status, preview_port, preview_status, created_at, updated_at)

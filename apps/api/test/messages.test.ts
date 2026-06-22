@@ -7,6 +7,7 @@ import { loadConfig, type AppConfig } from "../src/config.js";
 import { openDatabase } from "../src/db/database.js";
 import { EventBus } from "../src/events/event-bus.js";
 import { ProjectService, ProjectNotFoundError } from "../src/projects/project-service.js";
+import { TemplateService } from "../src/templates/template-service.js";
 import { registerMessageRoutes } from "../src/routes/messages.js";
 import { createAgentRunner, type AgentRunner } from "../src/agent/agent-runner.js";
 import { ConversationService } from "../src/conversations/conversation-service.js";
@@ -86,7 +87,7 @@ describe("message routes", () => {
     const config = testConfig(tempDir);
     const app = Fastify({ logger: false });
     const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
-    const projects = new ProjectService(db, config);
+    const projects = new ProjectService(db, config, new TemplateService(config.templatesDir));
     const conversations = new ConversationService(db);
     const bus = new EventBus();
     const runner = createAgentRunner(config, bus);

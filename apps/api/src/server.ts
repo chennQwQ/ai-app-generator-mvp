@@ -24,7 +24,7 @@ export async function createServer(config: AppConfig) {
   const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
   const bus = new EventBus();
   const templates = new TemplateService(config.templatesDir);
-  const projects = new ProjectService(db, config);
+  const projects = new ProjectService(db, config, templates);
   const files = new FileService();
   const conversations = new ConversationService(db);
   const runner = createAgentRunner(config, bus);

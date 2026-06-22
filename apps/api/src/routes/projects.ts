@@ -32,10 +32,17 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
         ? body.name.trim()
         : "";
     if (!name) return reply.code(400).send({ message: "Project name is required" });
+    const template =
+      body && typeof body === "object" && "template" in body && typeof body.template === "string"
+        ? body.template.trim()
+        : "react-vite";
     try {
-      const project = projects.createProject(name);
+      const project = projects.createProject(name, template);
       return reply.code(201).send(project);
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Unknown template")) {
+        return reply.code(400).send({ message: error.message });
+      }
       request.log.error({ err: error }, "Project creation failed");
       return reply.code(500).send({ message: "Project creation failed" });
     }

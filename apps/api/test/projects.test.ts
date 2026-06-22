@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { openDatabase } from "../src/db/database.js";
 import { ProjectService } from "../src/projects/project-service.js";
+import { TemplateService } from "../src/templates/template-service.js";
 import { registerProjectRoutes } from "../src/routes/projects.js";
 import { createServer } from "../src/server.js";
 
@@ -62,8 +63,7 @@ describe("project routes", () => {
         select raise(abort, 'forced conversation insert failure');
       end;
     `);
-    const projects = new ProjectService(db, config);
-
+    const projects = new ProjectService(db, config, new TemplateService(config.templatesDir));
     expect(() => projects.createProject("Broken App")).toThrow("forced conversation insert failure");
     expect(db.prepare("select count(*) as count from projects").get()).toEqual({ count: 0 });
     expect(readdirSync(config.workspaceDir)).toHaveLength(0);
@@ -80,8 +80,7 @@ describe("project routes", () => {
       TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
     });
     const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
-    const projects = new ProjectService(db, config);
-    const project = projects.createProject("Preview Reset App");
+    const projects = new ProjectService(db, config, new TemplateService(config.templatesDir));    const project = projects.createProject("Preview Reset App");
 
     projects.updatePreview(project.id, {
       status: "running",
@@ -100,12 +99,13 @@ describe("project routes", () => {
 
   it("returns a generic creation error when template copy fails", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
-    const missingTemplateDir = path.join(tempDir, "missing-template");
+    const templatesDir = path.join(tempDir, "templates");
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
       WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: missingTemplateDir
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
+      TEMPLATES_DIR: templatesDir
     });
     const app = await createServer(config);
 
@@ -118,7 +118,7 @@ describe("project routes", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ message: "Project creation failed" });
     const body = response.body;
-    expect(body).not.toContain(missingTemplateDir);
+    expect(body).not.toContain(templatesDir);
     expect(body).not.toContain("ENOENT");
     expect(body).not.toContain("no such file or directory");
 
@@ -258,6 +258,50 @@ describe("project routes", () => {
     const res = await app.inject({ method: "DELETE", url: "/api/projects/nonexistent" });
     expect(res.statusCode).toBe(404);
 
+    await app.close();
+  });
+
+  it("creates a project with a vue template", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Vue App", template: "vue-vite" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    const project = response.json();
+    expect(project.name).toBe("Vue App");
+    await app.close();
+  });
+
+  it("rejects unknown template ids", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Bad", template: "nonexistent" }
+    });
+
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });

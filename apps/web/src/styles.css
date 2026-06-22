@@ -513,12 +513,17 @@ a {
 }
 
 .error-banner .error-actions button {
-  background: rgba(255, 255, 255, 0.2);
-  border: 0;
+  background: rgba(159, 18, 57, 0.12);
+  border: 1px solid rgba(159, 18, 57, 0.2);
   border-radius: 3px;
-  color: inherit;
+  color: #9f1239;
   cursor: pointer;
+  font-weight: 500;
   padding: 2px 8px;
+}
+
+.error-banner .error-actions button:hover {
+  background: rgba(159, 18, 57, 0.2);
 }
 
 @media (max-width: 1180px) {

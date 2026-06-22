@@ -293,6 +293,7 @@ export function App() {
       setProjects((current) => current.filter((p) => p.id !== projectId));
       if (activeProjectIdRef.current === projectId) {
         setActiveProjectId(null);
+        setShowIframe(false);
       }
     } catch (caught) {
       setError(errorMessage(caught));

@@ -1,4 +1,5 @@
 import type {
+  AgentLog,
   AgentRun,
   ChatMessage,
   FileNode,
@@ -61,6 +62,16 @@ export async function stopPreview(projectId: string): Promise<PreviewInfo> {
   return request<PreviewInfo>(`/api/projects/${encodeURIComponent(projectId)}/preview/stop`, {
     method: "POST"
   });
+}
+
+export async function listAgentRuns(projectId: string): Promise<AgentRun[]> {
+  return request<AgentRun[]>(`/api/projects/${encodeURIComponent(projectId)}/runs`);
+}
+
+export async function getRunLogs(projectId: string, runId: string): Promise<AgentLog[]> {
+  return request<AgentLog[]>(
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/logs`
+  );
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

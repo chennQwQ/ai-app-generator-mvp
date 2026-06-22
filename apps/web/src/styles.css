@@ -385,6 +385,51 @@ a {
   margin: 0;
 }
 
+.run-history {
+  min-height: 120px;
+}
+
+.run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.run-item {
+  align-items: center;
+  background: #f6f8fa;
+  border: 1px solid #d7dde4;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.run-item.active {
+  background: #e2ebf5;
+  border-color: #15638a;
+}
+
+.run-item:hover {
+  background: #eef2f5;
+}
+
+.run-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-status {
+  color: #66717d;
+  flex-shrink: 0;
+}
+
 @media (max-width: 1180px) {
   .studio-grid {
     grid-template-columns: minmax(220px, 280px) 1fr;

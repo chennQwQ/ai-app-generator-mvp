@@ -173,6 +173,20 @@ export class ConversationService {
     return mapAgentRun(row);
   }
 
+  listAgentRuns(projectId: string): AgentRun[] {
+    return this.db
+      .prepare("select * from agent_runs where project_id = ? order by created_at desc")
+      .all(projectId)
+      .map(mapAgentRun);
+  }
+
+  listAgentLogs(runId: string): AgentLog[] {
+    return this.db
+      .prepare("select * from agent_logs where agent_run_id = ? order by sequence asc")
+      .all(runId)
+      .map(mapAgentLog);
+  }
+
   private getConversation(projectId: string): { id: string } {
     const row = this.db
       .prepare("select id from conversations where project_id = ? order by created_at asc limit 1")

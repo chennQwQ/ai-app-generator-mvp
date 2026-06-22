@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentLog,
+  AgentRun,
   ChatMessage,
   FileNode,
   PreviewInfo,
@@ -11,6 +12,8 @@ import {
   createProject,
   getFileContent,
   getFiles,
+  getRunLogs,
+  listAgentRuns,
   listMessages,
   listProjects,
   sendMessage,
@@ -38,6 +41,8 @@ export function App() {
   const [preview, setPreview] = useState<PreviewInfo>(defaultPreview);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const activeProjectIdRef = useRef<string | null>(null);
   const fileRequestIdRef = useRef(0);
 
@@ -72,6 +77,8 @@ export function App() {
       setMessages([]);
       setLogs([]);
       setFiles([]);
+      setRuns([]);
+      setSelectedRunId(null);
       setSelectedPath(null);
       setFileContent("");
       setPreview(defaultPreview);
@@ -83,13 +90,15 @@ export function App() {
 
     async function loadProject() {
       try {
-        const [nextMessages, nextFiles] = await Promise.all([
+        const [nextMessages, nextFiles, nextRuns] = await Promise.all([
           listMessages(projectId),
-          getFiles(projectId)
+          getFiles(projectId),
+          listAgentRuns(projectId)
         ]);
         if (cancelled) return;
         setMessages(nextMessages);
         setFiles(nextFiles);
+        setRuns(nextRuns);
         setLogs([]);
         setSelectedPath(null);
         setFileContent("");
@@ -113,6 +122,9 @@ export function App() {
 
       if (event.type === "run.log") {
         setLogs((currentLogs) => [...currentLogs, event.log]);
+      }
+      if (event.type === "run.status") {
+        listAgentRuns(projectId).then(setRuns).catch(() => {});
       }
       if (event.type === "files.changed") {
         reloadFiles(projectId).catch((caught) => {
@@ -227,6 +239,20 @@ export function App() {
       const nextPreview = await stopPreview(projectId);
       if (activeProjectIdRef.current !== projectId) return;
       setPreview(nextPreview);
+    } catch (caught) {
+      if (activeProjectIdRef.current === projectId) setError(errorMessage(caught));
+    }
+  }
+
+  async function handleSelectRun(runId: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+
+    try {
+      setSelectedRunId(runId);
+      const runLogs = await getRunLogs(projectId, runId);
+      if (activeProjectIdRef.current !== projectId) return;
+      setLogs(runLogs);
     } catch (caught) {
       if (activeProjectIdRef.current === projectId) setError(errorMessage(caught));
     }
@@ -355,9 +381,31 @@ export function App() {
             </div>
           </div>
 
+          <section className="run-history" aria-label="Run history">
+            <div className="panel-heading compact">
+              <h3>Run History</h3>
+              <span>{runs.length}</span>
+            </div>
+            <div className="run-list">
+              {runs.map((run) => (
+                <button
+                  className={run.id === selectedRunId ? "run-item active" : "run-item"}
+                  key={run.id}
+                  onClick={() => handleSelectRun(run.id)}
+                  type="button"
+                >
+                  <span className={`status-dot status-${run.status}`} />
+                  <span className="run-summary">{run.prompt.slice(0, 60)}{run.prompt.length > 60 ? "…" : ""}</span>
+                  <small className="run-status">{run.status}</small>
+                </button>
+              ))}
+              {runs.length === 0 ? <p className="empty-state">No runs yet.</p> : null}
+            </div>
+          </section>
+
           <section className="log-panel" aria-label="Run logs">
             <div className="panel-heading compact">
-              <h3>Logs</h3>
+              <h3>Logs{selectedRunId ? " (historical)" : " (live)"}</h3>
               <span>{logs.length}</span>
             </div>
             <div className="log-list">

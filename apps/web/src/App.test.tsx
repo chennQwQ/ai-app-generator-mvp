@@ -79,6 +79,14 @@ describe("App", () => {
           return jsonResponse([]);
         }
 
+        if (url.endsWith("/api/projects/project-1/runs")) {
+          return jsonResponse([]);
+        }
+
+        if (url.endsWith("/api/projects/project-2/runs")) {
+          return jsonResponse([]);
+        }
+
         return jsonResponse({ message: "Unhandled test URL" }, 404);
       })
     );

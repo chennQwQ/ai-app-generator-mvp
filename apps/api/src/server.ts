@@ -14,6 +14,7 @@ import { registerFileRoutes } from "./routes/files.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerProjectRoutes } from "./routes/projects.js";
+import { registerRunRoutes } from "./routes/runs.js";
 import { registerWebSocketRoutes } from "./routes/ws.js";
 
 export async function createServer(config: AppConfig) {
@@ -38,6 +39,7 @@ export async function createServer(config: AppConfig) {
   });
   app.get("/api/health", async () => ({ ok: true }));
   await registerProjectRoutes(app, projects);
+  await registerRunRoutes(app, projects, conversations);
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);

@@ -3,6 +3,10 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
+vi.mock("@monaco-editor/react", () => ({
+  default: ({ value }: { value: string }) => <pre data-testid="monaco-editor">{value}</pre>
+}));
+
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
 

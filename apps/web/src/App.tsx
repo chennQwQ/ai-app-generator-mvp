@@ -23,6 +23,9 @@ import {
   stopPreview,
   wsBase
 } from "./api";
+import { Editor } from "./components/Editor";
+import { ErrorBanner } from "./components/ErrorBanner";
+import { LoadingSkeleton } from "./components/LoadingSkeleton";
 
 const defaultPreview: PreviewInfo = {
   status: "stopped",
@@ -43,10 +46,13 @@ export function App() {
   const [preview, setPreview] = useState<PreviewInfo>(defaultPreview);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [showIframe, setShowIframe] = useState(false);
   const activeProjectIdRef = useRef<string | null>(null);
   const fileRequestIdRef = useRef(0);
+  const logListRef = useRef<HTMLDivElement>(null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -57,7 +63,14 @@ export function App() {
     const nextProjects = await listProjects();
     setProjects(nextProjects);
     setActiveProjectId((currentProjectId) => currentProjectId ?? nextProjects[0]?.id ?? null);
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (logListRef.current) {
+      logListRef.current.scrollTop = logListRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const reloadFiles = useCallback(async (projectId: string) => {
     const nextFiles = await getFiles(projectId);
@@ -305,9 +318,11 @@ export function App() {
       </header>
 
       {error ? (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
+        <ErrorBanner
+          message={error}
+          onDismiss={() => setError(null)}
+          onRetry={() => reloadProjects()}
+        />
       ) : null}
 
       <section className="studio-grid">
@@ -330,7 +345,10 @@ export function App() {
           </form>
 
           <div className="project-list" role="list">
-            {projects.map((project) => (
+            {isLoading ? (
+              <LoadingSkeleton lines={3} />
+            ) : (
+              projects.map((project) => (
               <button
                 className={project.id === activeProjectId ? "project-item active" : "project-item"}
                 key={project.id}
@@ -350,8 +368,9 @@ export function App() {
                   ×
                 </span>
               </button>
-            ))}
-            {projects.length === 0 ? <p className="empty-state">No projects yet.</p> : null}
+            ))
+          )}
+            {projects.length === 0 && !isLoading ? <p className="empty-state">No projects yet.</p> : null}
           </div>
         </aside>
 
@@ -413,9 +432,22 @@ export function App() {
 
             <div className="file-viewer">
               <div className="file-title">{selectedPath ?? "Select a file"}</div>
-              <pre>{fileContent || "File content will appear here."}</pre>
+              {selectedPath && fileContent ? (
+                <Editor value={fileContent} path={selectedPath} />
+              ) : (
+                <pre>File content will appear here.</pre>
+              )}
             </div>
           </div>
+
+          {preview.status === "running" ? (
+            <button className="show-preview-btn" onClick={() => setShowIframe((v) => !v)} type="button">
+              {showIframe ? "Hide Preview" : "Show Preview"}
+            </button>
+          ) : null}
+          {showIframe && preview.url ? (
+            <iframe className="preview-iframe" src={preview.url} title="Preview" />
+          ) : null}
 
           <section className="run-history" aria-label="Run history">
             <div className="panel-heading compact">
@@ -453,7 +485,7 @@ export function App() {
               <h3>Logs{selectedRunId ? " (historical)" : " (live)"}</h3>
               <span>{logs.length}</span>
             </div>
-            <div className="log-list">
+            <div className="log-list" ref={logListRef}>
               {logs.map((log) => (
                 <code className={`log-line log-${log.stream}`} key={log.id}>
                   {log.content}

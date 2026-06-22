@@ -51,7 +51,11 @@ describe("PreviewManager", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-preview-"));
     const config = testConfig(tempDir, { PREVIEW_PORT_START: "7450" });
     const workspace = makeNodeWorkspace(tempDir, "workspace");
-    const exitScript = writeWorkspaceScript(workspace, "exit.js", "setTimeout(() => process.exit(7), 10);\n");
+    const exitScript = writeWorkspaceScript(
+      workspace,
+      "exit.js",
+      "process.stderr.write('preview failed\\n'); setTimeout(() => process.exit(7), 10);\n"
+    );
     const bus = new EventBus();
     const manager = new PreviewManager(config, bus, {
       command: process.execPath,
@@ -64,7 +68,12 @@ describe("PreviewManager", () => {
     const stopped = manager.stop("project-a");
 
     expect(preview).toEqual({ status: "running", port: 7450, url: "http://127.0.0.1:7450" });
-    expect(errorPreview).toEqual({ status: "error", port: 7450, url: "http://127.0.0.1:7450" });
+    expect(errorPreview).toEqual({
+      status: "error",
+      port: 7450,
+      url: "http://127.0.0.1:7450",
+      output: "preview failed\n"
+    });
     expect(stopped).toEqual({ status: "stopped", port: null, url: null });
   });
 
@@ -83,7 +92,10 @@ describe("PreviewManager", () => {
     const errorPreview = await errorStatus;
 
     expect(preview).toEqual({ status: "running", port: 7455, url: "http://127.0.0.1:7455" });
-    expect(errorPreview).toEqual({ status: "error", port: 7455, url: "http://127.0.0.1:7455" });
+    expect(errorPreview.status).toBe("error");
+    expect(errorPreview.port).toBe(7455);
+    expect(errorPreview.url).toBe("http://127.0.0.1:7455");
+    expect(errorPreview.output).toContain("missing-preview-command-for-test");
   });
 
   it("runs install before publishing a running dev server", async () => {

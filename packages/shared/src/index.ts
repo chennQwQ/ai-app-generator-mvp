@@ -58,6 +58,7 @@ export interface PreviewInfo {
   status: PreviewStatus;
   port: number | null;
   url: string | null;
+  output?: string;
 }
 
 export const projectEventTypes = [

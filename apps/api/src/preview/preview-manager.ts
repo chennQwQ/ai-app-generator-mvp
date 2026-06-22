@@ -23,9 +23,11 @@ export type PreviewCommandProvider = PreviewCommandSource | PreviewCommandPlan;
 interface ActivePreview {
   process: ChildProcessWithoutNullStreams;
   info: PreviewInfo;
+  output: PreviewOutputCollector;
 }
 
 const stoppedPreview: PreviewInfo = { status: "stopped", port: null, url: null };
+const maxPreviewOutputLength = 8_000;
 
 export class PreviewManager {
   private readonly previews = new Map<string, ActivePreview>();
@@ -66,21 +68,23 @@ export class PreviewManager {
 
     if (installCommand) {
       const installProcess = spawnPreview(installCommand.command, installCommand.args, workspacePath);
-      this.previews.set(projectId, { process: installProcess, info: preview });
+      const installOutput = collectPreviewOutput(installProcess);
+      this.previews.set(projectId, { process: installProcess, info: preview, output: installOutput });
       this.attachInstallHandlers({
         projectId,
         workspacePath,
         port,
         child: installProcess,
-        preview
+        preview,
+        output: installOutput
       });
       this.bus.publish({ type: "preview.status", projectId, preview });
       return preview;
     }
 
     const devPreview = { ...preview, status: "running" as const };
-    const devProcess = this.spawnDevProcess(projectId, workspacePath, port, devPreview);
-    this.previews.set(projectId, { process: devProcess, info: devPreview });
+    const dev = this.spawnDevProcess(projectId, workspacePath, port, devPreview);
+    this.previews.set(projectId, dev);
 
     this.bus.publish({ type: "preview.status", projectId, preview: devPreview });
     return devPreview;
@@ -107,11 +111,12 @@ export class PreviewManager {
     workspacePath: string,
     port: number,
     preview: PreviewInfo
-  ): ChildProcessWithoutNullStreams {
+  ): ActivePreview {
     const command = this.commandPlan.dev(port);
     const child = spawnPreview(command.command, command.args, workspacePath);
-    this.attachDevHandlers(projectId, child, preview);
-    return child;
+    const output = collectPreviewOutput(child);
+    this.attachDevHandlers(projectId, child, preview, output);
+    return { process: child, info: preview, output };
   }
 
   private finishInstallAndStartDev(
@@ -125,27 +130,32 @@ export class PreviewManager {
     if (!active || active.process !== installProcess) return;
 
     const runningPreview: PreviewInfo = { ...preview, status: "running" };
-    const devProcess = this.spawnDevProcess(projectId, workspacePath, port, runningPreview);
-    this.previews.set(projectId, { process: devProcess, info: runningPreview });
+    const dev = this.spawnDevProcess(projectId, workspacePath, port, runningPreview);
+    this.previews.set(projectId, dev);
     this.bus.publish({ type: "preview.status", projectId, preview: runningPreview });
   }
 
   private markPreviewError(
     projectId: string,
     child: ChildProcessWithoutNullStreams,
-    preview: PreviewInfo
+    preview: PreviewInfo,
+    output: PreviewOutputCollector
   ): void {
     const active = this.previews.get(projectId);
     if (!active || active.process !== child) return;
 
     this.previews.delete(projectId);
-    const errorPreview: PreviewInfo = { ...preview, status: "error" };
+    const errorOutput = output.read();
+    const errorPreview: PreviewInfo = errorOutput
+      ? { ...preview, status: "error", output: errorOutput }
+      : { ...preview, status: "error" };
     this.bus.publish({ type: "preview.status", projectId, preview: errorPreview });
   }
 
   private attachInstallHandlers(options: InstallHandlerOptions): void {
-    options.child.on("error", () => {
-      this.markPreviewError(options.projectId, options.child, options.preview);
+    options.child.on("error", (error) => {
+      options.output.append(error.message);
+      this.markPreviewError(options.projectId, options.child, options.preview, options.output);
     });
     options.child.on("close", (code) => {
       if (code === 0) {
@@ -159,20 +169,22 @@ export class PreviewManager {
         return;
       }
 
-      this.markPreviewError(options.projectId, options.child, options.preview);
+      this.markPreviewError(options.projectId, options.child, options.preview, options.output);
     });
   }
 
   private attachDevHandlers(
     projectId: string,
     child: ChildProcessWithoutNullStreams,
-    preview: PreviewInfo
+    preview: PreviewInfo,
+    output: PreviewOutputCollector
   ): void {
-    child.on("error", () => {
-      this.markPreviewError(projectId, child, preview);
+    child.on("error", (error) => {
+      output.append(error.message);
+      this.markPreviewError(projectId, child, preview, output);
     });
     child.on("close", () => {
-      this.markPreviewError(projectId, child, preview);
+      this.markPreviewError(projectId, child, preview, output);
     });
   }
 }
@@ -188,6 +200,12 @@ interface InstallHandlerOptions {
   port: number;
   child: ChildProcessWithoutNullStreams;
   preview: PreviewInfo;
+  output: PreviewOutputCollector;
+}
+
+interface PreviewOutputCollector {
+  append(value: string | Buffer): void;
+  read(): string;
 }
 
 function normalizeCommandProvider(commandProvider: PreviewCommandProvider): ResolvedPreviewCommandPlan {
@@ -234,6 +252,29 @@ function spawnPreview(
     detached: process.platform !== "win32",
     windowsHide: true
   });
+}
+
+function collectPreviewOutput(child: ChildProcessWithoutNullStreams): PreviewOutputCollector {
+  const chunks: string[] = [];
+  let outputLength = 0;
+
+  const append = (value: string | Buffer) => {
+    if (outputLength >= maxPreviewOutputLength) return;
+
+    const text = value.toString();
+    const remaining = maxPreviewOutputLength - outputLength;
+    const nextChunk = text.slice(0, remaining);
+    chunks.push(nextChunk);
+    outputLength += nextChunk.length;
+  };
+
+  child.stdout.on("data", append);
+  child.stderr.on("data", append);
+
+  return {
+    append,
+    read: () => chunks.join("")
+  };
 }
 
 function killPreview(child: ChildProcessWithoutNullStreams): void {

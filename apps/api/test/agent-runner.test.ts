@@ -90,7 +90,7 @@ describe("OpenCodeAgentRunner", () => {
       ["@echo off", `node "${cliPath}" %*`].join("\r\n"),
       "utf8"
     );
-    const prompt = "Build from shim & echo INJECTED | more < input > output with \"quotes\"";
+    const prompt = "Build from shim \" & echo INJECTED_STDOUT | more < input > output";
     const runner = new OpenCodeAgentRunner(
       {
         ...fakeConfig(tempDir),
@@ -111,6 +111,7 @@ describe("OpenCodeAgentRunner", () => {
 
     expect(result).toEqual({ exitCode: 0, errorMessage: null });
     expect(logs.join("")).toContain("shim stdout");
+    expect(logs.join("")).not.toContain("INJECTED_STDOUT");
     expect(logs.join("")).not.toContain("INJECTED");
     const recorded = JSON.parse(readFileSync(recordPath, "utf8")) as {
       cwd: string;
@@ -154,7 +155,7 @@ describe("OpenCodeAgentRunner", () => {
     const originalPathExt = process.env.PATHEXT;
     process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ""}`;
     process.env.PATHEXT = ".CMD;.EXE;.BAT;.COM";
-    const prompt = "Use default opencode & echo INJECTED_STDOUT | more <x> \"quoted\"";
+    const prompt = "Use default opencode \" & echo INJECTED_STDOUT | more <x>";
     const runner = new OpenCodeAgentRunner(
       {
         ...fakeConfig(tempDir),

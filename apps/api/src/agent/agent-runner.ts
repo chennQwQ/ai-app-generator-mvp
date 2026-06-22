@@ -215,9 +215,7 @@ function buildWindowsShimCommand(commandName: string, args: string[]): string {
 }
 
 function quoteWindowsCommandArgument(value: string): string {
-  return `"${value
-    .replace(/(\\*)"/g, '$1$1\\"')
-    .replace(/(\\+)$/g, "$1$1")}"`;
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function splitCommand(command: string): string[] {

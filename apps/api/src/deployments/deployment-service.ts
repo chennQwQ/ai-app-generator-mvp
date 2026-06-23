@@ -1,9 +1,9 @@
 import { exec } from "node:child_process";
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
-import type { DeploymentInfo, DeploymentStatus } from "@ai-app-generator/shared";
+import type { DeploymentInfo } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 import type { EventBus } from "../events/event-bus.js";
 import type { ProjectService } from "../projects/project-service.js";
@@ -68,11 +68,11 @@ export class DeploymentService {
       const deployDist = path.join(outputDir, "dist");
       const deployPrev = path.join(outputDir, "dist-prev");
 
-      rmSync(deployPrev, { recursive: true, force: true });
+      mkdirSync(path.dirname(deployDist), { recursive: true });
       if (exists(deployDist)) {
+        rmSync(deployPrev, { recursive: true, force: true });
         cpSync(deployDist, deployPrev, { recursive: true, force: true });
       }
-      mkdirSync(path.dirname(deployDist), { recursive: true });
       cpSync(sourceDist, deployDist, { recursive: true });
 
       const finishedAt = new Date().toISOString();
@@ -128,7 +128,7 @@ export class DeploymentService {
 
 function runCommand(command: string, cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = exec(command, {
+    exec(command, {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
       timeout: 120000,
@@ -145,7 +145,6 @@ function runCommand(command: string, cwd: string): Promise<string> {
 
 function exists(p: string): boolean {
   try {
-    const { statSync } = require("node:fs");
     statSync(p);
     return true;
   } catch {

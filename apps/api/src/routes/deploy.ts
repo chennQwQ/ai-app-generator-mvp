@@ -26,7 +26,10 @@ export async function registerDeployRoutes(
     try {
       projects.getWorkspacePath(projectId);
       const info = deployments.getLatest(projectId);
-      return info ?? { projectId, status: "building" as const, url: null, errorLog: null, startedAt: null, finishedAt: null };
+      if (!info) {
+        return reply.code(404).send({ message: "No deployment found" });
+      }
+      return info;
     } catch (error) {
       if (error instanceof ProjectNotFoundError) {
         return reply.code(404).send({ message: "Project not found" });

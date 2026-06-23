@@ -227,6 +227,7 @@ function fakeConfig(root: string): AppConfig {
     opencodeAgent: "build",
     opencodeRunFormat: "json",
     previewHost: "127.0.0.1",
-    previewPortStart: 6200
+    previewPortStart: 6200,
+    workflowRuntime: "local"
   };
 }

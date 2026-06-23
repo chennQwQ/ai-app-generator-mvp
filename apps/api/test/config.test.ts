@@ -9,6 +9,7 @@ describe("loadConfig", () => {
     expect(config.apiPort).toBe(4317);
     expect(config.agentProvider).toBe("fake");
     expect(config.opencodeCommand).toBe("opencode");
+    expect(config.workflowRuntime).toBe("local");
   });
 
   it("resolves default directories from the repo root cwd", () => {

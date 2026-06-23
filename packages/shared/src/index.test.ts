@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTerminalRunStatus, isTerminalWorkflowRunStatus, projectEventTypes, workflowNodeTypes, workflowEventTypes, toolDefinitions, getToolDefinition } from "./index.js";
+import { isTerminalRunStatus, isTerminalWorkflowRunStatus, projectEventTypes, workflowNodeTypes, workflowEventTypes, apiFlowCompatibleNodeTypes, toolDefinitions, getToolDefinition } from "./index.js";
 
 describe("shared domain helpers", () => {
   it("identifies terminal run statuses", () => {
@@ -81,5 +81,9 @@ describe("shared domain helpers", () => {
       "workflow.run.status",
       "workflow.node.status"
     ]);
+  });
+
+  it("lists apiFlow v1 compatible node types", () => {
+    expect(apiFlowCompatibleNodeTypes).toEqual(["user_input"]);
   });
 });

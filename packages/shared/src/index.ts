@@ -213,3 +213,41 @@ export const workflowEventTypes = [
 ] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];
+
+export const apiFlowCompatibleNodeTypes = ["user_input"] as const;
+
+export type ApiFlowCompatibleNodeType = (typeof apiFlowCompatibleNodeTypes)[number];
+
+export interface ApiFlowExportInput {
+  projectId: string;
+  workflowId: string;
+  workflowName: string;
+  graph: WorkflowGraph;
+}
+
+export interface ApiFlowExportResult {
+  version: number;
+  projectId: string;
+  workflowId: string;
+  dsl: string;
+  entryNodeIds: string[];
+  unsupportedNodes: string[];
+}
+
+export interface ApiFlowRunInput {
+  projectId: string;
+  workflowId: string;
+  workflowName: string;
+  graph: WorkflowGraph;
+}
+
+export interface ApiFlowExternalRun {
+  externalRunId: string;
+  workflowId: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  result: unknown | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}

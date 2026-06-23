@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { WorkflowGraph } from "@ai-app-generator/shared";
+import { apiFlowCompatibleNodeTypes } from "@ai-app-generator/shared";
 import {
   DuplicateWorkflowNameError,
   InvalidWorkflowGraphError,
@@ -7,11 +8,13 @@ import {
   type WorkflowService
 } from "../workflows/workflow-service.js";
 import { WorkflowRunActiveError, type WorkflowExecutor } from "../workflows/workflow-executor.js";
+import type { ApiFlowRuntimeAdapter } from "../apiflow/apiflow-adapter.js";
 
 export async function registerWorkflowRoutes(
   app: FastifyInstance,
   workflows: WorkflowService,
-  executor?: WorkflowExecutor
+  executor?: WorkflowExecutor,
+  apiFlowAdapter?: ApiFlowRuntimeAdapter
 ) {
   app.get("/api/projects/:projectId/workflows", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
@@ -112,6 +115,29 @@ export async function registerWorkflowRoutes(
       }
       request.log.error({ err: error }, "Workflow execution failed");
       return reply.code(500).send({ message: "Workflow execution failed" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/workflows/:workflowId/export", async (request, reply) => {
+    const { workflowId } = request.params as { workflowId: string };
+    if (!apiFlowAdapter) {
+      return reply.code(500).send({ message: "ApiFlow adapter not configured" });
+    }
+    try {
+      const workflow = workflows.getWorkflow(workflowId);
+      const result = await apiFlowAdapter.exportWorkflow({
+        projectId: workflow.projectId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        graph: workflow.graph
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof WorkflowNotFoundError) {
+        return reply.code(404).send({ message: "Workflow not found" });
+      }
+      request.log.error({ err: error }, "Workflow export failed");
+      return reply.code(500).send({ message: "Workflow export failed" });
     }
   });
 }

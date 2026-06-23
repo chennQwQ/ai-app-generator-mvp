@@ -14,6 +14,7 @@ export interface AppConfig {
   opencodeRunFormat: "json";
   previewHost: string;
   previewPortStart: number;
+  workflowRuntime: "local" | "apiflow";
 }
 
 export interface LoadConfigOptions {
@@ -47,6 +48,7 @@ export function loadConfig(
     opencodeAgent: env.OPENCODE_AGENT ?? "build",
     opencodeRunFormat: "json",
     previewHost: env.PREVIEW_HOST ?? "127.0.0.1",
-    previewPortStart: Number(env.PREVIEW_PORT_START ?? 6200)
+    previewPortStart: Number(env.PREVIEW_PORT_START ?? 6200),
+    workflowRuntime: env.WORKFLOW_RUNTIME === "apiflow" ? "apiflow" : "local"
   };
 }

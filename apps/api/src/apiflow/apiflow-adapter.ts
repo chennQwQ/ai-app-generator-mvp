@@ -63,6 +63,7 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
     });
 
     setTimeout(() => {
+      if (run.status === "cancelled") return;
       run.status = "running";
       run.startedAt = new Date().toISOString();
       this.bus.publish({
@@ -80,6 +81,7 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
       });
 
       setTimeout(() => {
+        if (run.status === "cancelled") return;
         run.status = "succeeded";
         run.finishedAt = new Date().toISOString();
         run.result = "Fake ApiFlow execution completed";

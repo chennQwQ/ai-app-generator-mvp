@@ -150,6 +150,19 @@ export class WorkflowExecutor {
                 }
               });
             });
+          } else if (node.type === "http_request") {
+            const url = (node.data.url as string) ?? "";
+            const method = (node.data.method as string) ?? "GET";
+            const response = await fetch(url, { method });
+            outputText = `HTTP ${method} ${url} → ${response.status}`;
+            this.audit.recordLog({
+              projectId,
+              runId: nanoid(),
+              toolName: "http_request",
+              parameters: { url, method },
+              exitCode: response.ok ? 0 : 1,
+              output: outputText
+            });
           }
 
           nodeContexts.set(node.id, outputText);

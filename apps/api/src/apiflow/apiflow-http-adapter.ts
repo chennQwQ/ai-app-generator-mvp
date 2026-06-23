@@ -1,5 +1,4 @@
 import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
-import type { EventBus } from "../events/event-bus.js";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
 import { DslCompiler } from "./dsl-compiler.js";
 
@@ -11,10 +10,7 @@ export interface HttpApiFlowConfig {
 export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   private readonly compiler = new DslCompiler();
 
-  constructor(
-    private readonly config: HttpApiFlowConfig,
-    private readonly bus: EventBus
-  ) {}
+  constructor(private readonly config: HttpApiFlowConfig) {}
 
   async exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult> {
     const validation = this.compiler.validateForExport(input.graph);
@@ -37,12 +33,11 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
     const dsl = this.compiler.compile(input.graph);
 
     const response = await this.request<{ runId: string }>(
-      "/api/apiflow/workflows/${workflowId}/runs",
+      `/api/apiflow/workflows/${encodeURIComponent(input.workflowId)}/runs`,
       {
         method: "POST",
         body: JSON.stringify({ dsl, input: { prompt: "" } })
-      },
-      input.workflowId
+      }
     );
 
     return {
@@ -84,10 +79,9 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
 
   private async request<T = void>(
     path: string,
-    init: RequestInit = {},
-    workflowIdPlaceholder?: string
+    init: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.config.baseUrl}${path.replace("${workflowId}", workflowIdPlaceholder ?? "")}`;
+    const url = `${this.config.baseUrl}${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeout ?? 10000);
 

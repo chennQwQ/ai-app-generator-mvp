@@ -43,7 +43,7 @@ export async function createServer(config: AppConfig) {
   const apiFlowAdapter = config.workflowRuntime === "apiflow"
     ? new FakeApiFlowRuntimeAdapter(bus)
     : config.workflowRuntime === "apiflow-http"
-      ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl }, bus)
+      ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl })
       : undefined;
 
   await app.register(cors, { origin: config.webOrigin });

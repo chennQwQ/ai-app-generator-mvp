@@ -1,4 +1,4 @@
-import type { WorkflowGraph, WorkflowNode, WorkflowNodeType } from "@ai-app-generator/shared";
+import type { WorkflowGraph } from "@ai-app-generator/shared";
 import { apiFlowCompatibleNodeTypes } from "@ai-app-generator/shared";
 
 export class DslCompiler {
@@ -10,8 +10,9 @@ export class DslCompiler {
     lines.push("");
 
     const nodeTaskNames = new Map<string, string>();
+    const order = topologicalSort(graph) ?? graph.nodes.map((n) => n.id);
 
-    for (const nodeId of topologicalSort(graph) ?? graph.nodes.map((n) => n.id)) {
+    for (const nodeId of order) {
       const foundNode = graph.nodes.find((node) => node.id === nodeId);
       if (!foundNode) continue;
 
@@ -40,8 +41,6 @@ export class DslCompiler {
     }
 
     lines.push("start {");
-    const sorted = topologicalSort(graph);
-    const order = sorted ?? graph.nodes.map((n) => n.id);
     for (const nodeId of order) {
       const taskName = nodeTaskNames.get(nodeId);
       if (taskName) {

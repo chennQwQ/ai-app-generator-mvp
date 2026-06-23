@@ -136,8 +136,11 @@ export async function registerWorkflowRoutes(
       if (error instanceof WorkflowNotFoundError) {
         return reply.code(404).send({ message: "Workflow not found" });
       }
-      if (error instanceof Error && error.message.includes("unsupported")) {
-        return reply.code(400).send({ message: error.message });
+      if (error instanceof Error) {
+        const message = error.message;
+        if (message.includes("unsupported") || message.includes("cycles")) {
+          return reply.code(400).send({ message });
+        }
       }
       request.log.error({ err: error }, "Workflow export failed");
       return reply.code(500).send({ message: "Workflow export failed" });

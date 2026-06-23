@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
-import type { WorkflowRun } from "@ai-app-generator/shared";
+import type { WorkflowGraph, WorkflowRun } from "@ai-app-generator/shared";
 import type { EventBus } from "../events/event-bus.js";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
 
@@ -11,12 +11,12 @@ export class ApiFlowBridge {
     private readonly adapter: ApiFlowRuntimeAdapter
   ) {}
 
-  async startRun(workflowId: string, projectId: string, workflowName: string, graph: { nodes: unknown[]; edges: unknown[] }): Promise<WorkflowRun> {
+  async startRun(workflowId: string, projectId: string, workflowName: string, graph: WorkflowGraph): Promise<WorkflowRun> {
     const external = await this.adapter.startRun({
       projectId,
       workflowId,
       workflowName,
-      graph: graph as any
+      graph
     });
 
     const now = new Date().toISOString();

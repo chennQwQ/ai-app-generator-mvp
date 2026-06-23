@@ -141,14 +141,15 @@ Done:
 - Added fake `file_write` audit record.
 - Added lifecycle guard so cancelled runs are not overwritten by late completion.
 - Added audit close guard so late writes after app shutdown do not hit a closed DB.
+- Changed project creation to leave the visible workspace empty and store template selection as private metadata.
 - Made fake runner write `src/App.vue` for Vue projects and `src/App.tsx` for React projects.
 - Expanded tests for template selection, Vue/React generated files, audit logs, tool schema, cancellation, and shutdown.
 
 Acceptance:
 
 - `GET /api/templates` returns `react-vite` and `vue-vite`.
-- React project creation copies `src/App.tsx`.
-- Vue project creation copies `src/App.vue`.
+- React project creation starts with an empty visible file tree.
+- Vue project creation starts with an empty visible file tree.
 - Web template dropdown sends the selected template.
 - Shared tool schema tests verify required/default fields.
 - Fake Agent audit records include schema-complete `file_write` parameters.

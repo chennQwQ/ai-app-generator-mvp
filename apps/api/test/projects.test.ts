@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("project routes", () => {
-  it("creates a project and copies the template", async () => {
+  it("creates a project with an empty visible workspace", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
@@ -38,9 +38,17 @@ describe("project routes", () => {
     const project = response.json();
     expect(project.name).toBe("Todo App");
     expect(project.status).toBe("created");
-    expect(existsSync(path.join(config.workspaceDir, project.id, "package.json"))).toBe(true);
-    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "package.json"))).toBe(false);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(false);
     expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
+
+    const files = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/files`
+    });
+    expect(files.statusCode).toBe(200);
+    expect(files.json()).toEqual([]);
 
     const list = await app.inject({ method: "GET", url: "/api/projects" });
     expect(list.json().projects).toHaveLength(1);
@@ -97,7 +105,7 @@ describe("project routes", () => {
     db.close();
   });
 
-  it("returns a generic creation error when template copy fails", async () => {
+  it("does not require template files during project creation", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
     const templatesDir = path.join(tempDir, "templates");
     const config = loadConfig({
@@ -114,12 +122,13 @@ describe("project routes", () => {
       payload: { name: "Broken App" }
     });
 
-    expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({ message: "Project creation failed" });
-    const body = response.body;
-    expect(body).not.toContain(templatesDir);
-    expect(body).not.toContain("ENOENT");
-    expect(body).not.toContain("no such file or directory");
+    expect(response.statusCode).toBe(201);
+    const project = response.json();
+    const files = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/files`
+    });
+    expect(files.json()).toEqual([]);
 
     await app.close();
   });
@@ -275,8 +284,13 @@ describe("project routes", () => {
     expect(response.statusCode).toBe(201);
     const project = response.json();
     expect(project.name).toBe("Vue App");
-    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
     expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(false);
+    const files = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/files`
+    });
+    expect(files.json()).toEqual([]);
     await app.close();
   });
 
@@ -299,8 +313,13 @@ describe("project routes", () => {
     expect(response.statusCode).toBe(201);
     const project = response.json();
     expect(project.name).toBe("React App");
-    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(false);
     expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
+    const files = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/files`
+    });
+    expect(files.json()).toEqual([]);
     await app.close();
   });
 

@@ -51,6 +51,7 @@ Do not store DeepSeek or other provider credentials in this repository. Do not p
 ## Manual Acceptance Checklist for the Fake Runner
 
 - Create a project named `Todo App`.
+- Confirm the Files panel is empty before the first prompt is sent.
 - Send prompt: `Build a todo app with add, complete, delete, and filter controls.`
 - Confirm logs appear.
 - Confirm `src/App.tsx` appears in the file tree.
@@ -156,8 +157,10 @@ npm.cmd run build
 ### Phase 4 Manual Acceptance Checklist
 
 - Verify `GET /api/templates` returns both `react-vite` and `vue-vite`.
-- Create a project with `template: "vue-vite"` and confirm its workspace contains `src/App.vue`.
-- Create a project with `template: "react-vite"` and confirm its workspace contains `src/App.tsx`.
+- Create a project with `template: "vue-vite"` and confirm its visible file tree is empty before the first prompt.
+- Run the fake agent for that Vue project and confirm it writes `src/App.vue`.
+- Create a project with `template: "react-vite"` and confirm its visible file tree is empty before the first prompt.
+- Run the fake agent for that React project and confirm it writes `src/App.tsx`.
 - Open the web UI and confirm the template dropdown shows React and Vue options.
 - Run the fake agent and confirm `GET /api/projects/:id/audit` returns a `file_write` tool call.
 - Confirm the `audit_logs` table exists after schema initialization.

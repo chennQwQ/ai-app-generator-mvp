@@ -66,6 +66,25 @@ describe("FakeAgentRunner", () => {
     expect(appSource).toContain("{prompt}");
     expect(appSource).not.toContain("<Todo />");
   });
+
+  it("writes Vue output for an empty workspace with a Vue template marker", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-agent-vue-"));
+    writeFileSync(path.join(tempDir, ".ai-template"), "vue-vite\n");
+    const runner = new FakeAgentRunner(fakeConfig(tempDir), new EventBus());
+
+    const result = await runner.run({
+      projectId: "project-1",
+      runId: "run-1",
+      workspacePath: tempDir,
+      prompt: "Build Vue app"
+    });
+
+    expect(result).toEqual({ exitCode: 0, errorMessage: null });
+    expect(existsSync(path.join(tempDir, "src", "App.vue"))).toBe(true);
+    expect(existsSync(path.join(tempDir, "src", "App.tsx"))).toBe(false);
+    const appSource = readFileSync(path.join(tempDir, "src", "App.vue"), "utf8");
+    expect(appSource).toContain("Build Vue app");
+  });
 });
 
 describe("OpenCodeAgentRunner", () => {

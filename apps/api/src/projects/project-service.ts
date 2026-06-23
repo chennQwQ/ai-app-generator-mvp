@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
@@ -25,11 +25,12 @@ export class ProjectService {
     const id = nanoid();
     const slug = this.slugify(name, id);
     const workspacePath = path.join(this.config.workspaceDir, id);
-    const templateDir = this.templates.resolveDir(template);
+    const selectedTemplate = this.templates.getTemplate(template);
 
     mkdirSync(this.config.workspaceDir, { recursive: true });
     try {
-      cpSync(templateDir, workspacePath, { recursive: true });
+      mkdirSync(workspacePath, { recursive: true });
+      writeFileSync(path.join(workspacePath, ".ai-template"), `${selectedTemplate.id}\n`, "utf8");
       this.db.transaction(() => {
         this.db.prepare(`
           insert into projects (id, name, slug, workspace_path, status, preview_port, preview_status, created_at, updated_at)

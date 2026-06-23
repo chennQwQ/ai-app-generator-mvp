@@ -38,6 +38,7 @@ describe("FileService", () => {
       ".git/config",
       "dist/app.js",
       ".env",
+      ".ai-template",
       ".cache/state.json",
       "coverage/index.html"
     ]));
@@ -66,6 +67,8 @@ describe("FileService", () => {
   it.each([
     ".env",
     ".ENV",
+    ".ai-template",
+    ".AI-TEMPLATE",
     "node_modules/hidden.js",
     "NODE_MODULES/hidden.js",
     ".git/config",
@@ -135,7 +138,7 @@ describe("FileService", () => {
 });
 
 describe("file routes", () => {
-  it("lists files and reads content for a createServer-created project", async () => {
+  it("lists an empty visible tree for a newly created project", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-file-routes-"));
     const app = await createServer(testConfig(tempDir));
 
@@ -145,6 +148,32 @@ describe("file routes", () => {
       payload: { name: "File Browser App" }
     });
     const project = projectResponse.json();
+
+    const treeResponse = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/files`
+    });
+    expect(treeResponse.statusCode).toBe(200);
+    expect(treeResponse.json()).toEqual([]);
+
+    await app.close();
+  });
+
+  it("lists files and reads generated content for a createServer-created project", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-file-routes-"));
+    const config = testConfig(tempDir);
+    const app = await createServer(config);
+
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Generated File Browser App" }
+    });
+    const project = projectResponse.json();
+    const workspacePath = path.join(config.workspaceDir, project.id);
+    mkdirSync(path.join(workspacePath, "src"), { recursive: true });
+    writeFileSync(path.join(workspacePath, "src", "App.tsx"), "export default function App() {}\n");
+    writeFileSync(path.join(workspacePath, "package.json"), "{\"scripts\":{}}\n");
 
     const treeResponse = await app.inject({
       method: "GET",
@@ -274,6 +303,8 @@ describe("file routes", () => {
       });
       const project = projectResponse.json();
       const workspacePath = path.join(config.workspaceDir, project.id);
+      mkdirSync(path.join(workspacePath, "src"), { recursive: true });
+      writeFileSync(path.join(workspacePath, "src", "App.tsx"), "export default function App() {}\n");
       symlinkSync(path.join(workspacePath, "src"), path.join(workspacePath, "linked-src"), "junction");
 
       const response = await app.inject({
@@ -313,6 +344,7 @@ describe("file routes", () => {
       payload: { name: "Read Error App" }
     });
     const project = projectResponse.json();
+    mkdirSync(path.join(config.workspaceDir, project.id, "src"), { recursive: true });
     writeFileSync(path.join(config.workspaceDir, project.id, "large.txt"), "x".repeat(257 * 1024));
 
     const missingFile = await app.inject({
@@ -424,6 +456,7 @@ function createWorkspace(workspacePath: string): void {
   writeFileSync(path.join(workspacePath, ".git", "config"), "");
   writeFileSync(path.join(workspacePath, "dist", "app.js"), "");
   writeFileSync(path.join(workspacePath, ".env"), "SECRET=value\n");
+  writeFileSync(path.join(workspacePath, ".ai-template"), "react-vite\n");
   writeFileSync(path.join(workspacePath, ".cache", "state.json"), "{}\n");
   writeFileSync(path.join(workspacePath, "coverage", "index.html"), "");
 }
@@ -440,6 +473,7 @@ function createWorkspaceWithCaseVariantIgnoredEntries(workspacePath: string): vo
   writeFileSync(path.join(workspacePath, ".GIT", "config"), "");
   writeFileSync(path.join(workspacePath, "DIST", "app.js"), "");
   writeFileSync(path.join(workspacePath, ".ENV"), "SECRET=value\n");
+  writeFileSync(path.join(workspacePath, ".AI-TEMPLATE"), "react-vite\n");
   writeFileSync(path.join(workspacePath, ".CACHE", "state.json"), "{}\n");
   writeFileSync(path.join(workspacePath, "COVERAGE", "index.html"), "");
 }

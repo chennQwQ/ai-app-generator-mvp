@@ -17,12 +17,12 @@ The MVP is not a cloud SaaS product yet. It is a local-first development platfor
 
 1. User opens the Web Studio.
 2. User creates a project and chooses a template.
-3. Backend copies the selected template into `workspaces/{projectId}`.
+3. Backend creates an isolated empty workspace and records the selected template as private metadata.
 4. User submits a prompt.
 5. Backend creates a conversation message and one Agent run.
 6. Agent runner executes inside only that project workspace.
 7. Backend streams status and logs over WebSocket.
-8. User inspects generated files.
+8. User inspects files as they are written by the Agent.
 9. User starts a local preview server.
 10. User reviews audit history for tool calls.
 
@@ -61,7 +61,8 @@ The MVP is not a cloud SaaS product yet. It is a local-first development platfor
 - API exposes `GET /api/templates`.
 - Template metadata includes `id`, `name`, and `description`.
 - `react-vite` is the default template.
-- `vue-vite` is available and creates `src/App.vue`.
+- `vue-vite` is available and guides generation toward `src/App.vue`.
+- Project creation must not pre-populate visible template files; visible files appear only after an Agent run writes them.
 - Unknown template IDs are rejected with a client-safe error.
 
 ### Agent Runs
@@ -99,9 +100,10 @@ The MVP is not a cloud SaaS product yet. It is a local-first development platfor
 - `npm run typecheck` passes.
 - `npm run build` passes.
 - `git diff --check` exits 0.
-- A React project contains `src/App.tsx` and not `src/App.vue`.
-- A Vue project contains `src/App.vue` and not `src/App.tsx`.
-- Fake Agent updates the template-relevant app entry file.
+- A newly created project returns an empty visible file tree.
+- After generation, a React project contains `src/App.tsx` and not `src/App.vue`.
+- After generation, a Vue project contains `src/App.vue` and not `src/App.tsx`.
+- Fake Agent writes the template-relevant app entry file.
 - Audit history includes schema-complete `file_write` parameters.
 - OpenCode integration delegates provider/model selection to the user's OpenCode config.
 
@@ -110,5 +112,4 @@ The MVP is not a cloud SaaS product yet. It is a local-first development platfor
 - Local Agent execution is powerful; production isolation must be containerized or OS-user isolated before external users.
 - Preview processes can consume ports and resources; lifecycle cleanup must remain tested.
 - OpenCode output format may evolve; the runner should keep parsing isolated.
-- Multi-template support should eventually persist template identity instead of relying only on copied file structure.
-
+- Multi-template support stores template identity as private workspace metadata until a schema-level template field is needed.

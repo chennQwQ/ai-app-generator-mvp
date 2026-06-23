@@ -2,7 +2,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { FileNode } from "@ai-app-generator/shared";
 
-const ignoredNames = new Set(["node_modules", ".git", "dist", ".env", ".cache", "coverage"]);
+const ignoredNames = new Set(["node_modules", ".git", "dist", ".env", ".ai-template", ".cache", "coverage"]);
 const defaultMaxFileBytes = 256 * 1024;
 
 export class InvalidFilePathError extends Error {

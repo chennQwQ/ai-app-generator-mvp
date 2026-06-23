@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentLogStream } from "@ai-app-generator/shared";
@@ -197,9 +197,21 @@ export function createAgentRunner(config: AppConfig, bus: EventBus, audit?: Audi
 }
 
 function resolveFakeAppTarget(workspacePath: string): { path: string; kind: "react" | "vue" } {
-  return existsSync(path.join(workspacePath, "src", "App.vue"))
+  if (existsSync(path.join(workspacePath, "src", "App.vue"))) {
+    return { path: "src/App.vue", kind: "vue" };
+  }
+
+  return readProjectTemplate(workspacePath) === "vue-vite"
     ? { path: "src/App.vue", kind: "vue" }
     : { path: "src/App.tsx", kind: "react" };
+}
+
+function readProjectTemplate(workspacePath: string): string | null {
+  try {
+    return readFileSync(path.join(workspacePath, ".ai-template"), "utf8").trim();
+  } catch {
+    return null;
+  }
 }
 
 function renderFakeReactApp(prompt: string): string {

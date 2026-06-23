@@ -24,7 +24,7 @@ Runtime output directories such as `storage/`, `workspaces/`, `dist/`, `node_mod
 ```text
 Web Studio
   -> POST /api/projects
-  -> selected template copied into workspaces/{projectId}
+  -> empty workspace created; selected template stored as private metadata
   -> POST /api/projects/:projectId/messages
   -> ConversationService creates user message and run
   -> AgentRunner runs fake/OpenCode in workspace
@@ -71,7 +71,8 @@ Schema changes require tests in `apps/api/test/database.test.ts` and migration/b
 
 Owns project lifecycle:
 
-- copy selected template into a workspace
+- create an empty workspace
+- persist the selected template as private workspace metadata
 - create project and conversation rows in one transaction
 - list/read/delete projects
 - update preview state
@@ -88,7 +89,7 @@ When adding a template:
 1. Add a directory under `templates/{template-id}`.
 2. Add metadata to `TemplateService`.
 3. Add template existence tests.
-4. Add project creation tests that assert template-specific files.
+4. Add project creation tests that assert an empty visible workspace and template-specific generation behavior.
 5. Update `docs/phase-roadmap.md` if this belongs to a phase.
 
 ### `conversations/conversation-service.ts`
@@ -120,6 +121,7 @@ OpenCode integration contract:
 Fake runner behavior:
 
 - if `src/App.vue` exists, write `src/App.vue`
+- otherwise if private template metadata is `vue-vite`, write `src/App.vue`
 - otherwise write `src/App.tsx`
 - record `file_write` audit parameters with both `path` and `content`
 
@@ -143,7 +145,7 @@ Safety requirements:
 
 - reject absolute paths
 - reject `..`
-- reject ignored directories/files
+- reject ignored directories/files, including private `.ai-template` metadata
 - reject symlink escape
 - reject directories as content reads
 - reject files over the configured UI limit
@@ -241,4 +243,3 @@ Current shared contracts include:
 - audit log records
 
 When changing shared types, update tests in `packages/shared/src/index.test.ts` and run root typecheck.
-

@@ -1,6 +1,6 @@
 import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
-import { DslCompiler } from "./dsl-compiler.js";
+import { ApiFlowExportValidationError, DslCompiler } from "./dsl-compiler.js";
 
 export interface HttpApiFlowConfig {
   baseUrl: string;
@@ -15,7 +15,7 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   async exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult> {
     const validation = this.compiler.validateForExport(input.graph);
     if (!validation.valid) {
-      throw new Error(validation.errors.join("; "));
+      throw new ApiFlowExportValidationError(validation.errors, validation.unsupportedNodes);
     }
     return {
       version: 1,
@@ -30,13 +30,13 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    const dsl = this.compiler.compile(input.graph);
+    const exported = await this.exportWorkflow(input);
 
     const response = await this.request<{ runId: string }>(
       `/api/apiflow/workflows/${encodeURIComponent(input.workflowId)}/runs`,
       {
         method: "POST",
-        body: JSON.stringify({ dsl, input: { prompt: "" } })
+        body: JSON.stringify({ dsl: exported.dsl, input: { prompt: "" } })
       }
     );
 

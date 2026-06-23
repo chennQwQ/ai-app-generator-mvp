@@ -11,6 +11,10 @@ type TableRow = {
   name: string;
 };
 
+type TableInfoRow = {
+  name: string;
+};
+
 export function migrate(db: Database.Database) {
   db.exec(`
     create table if not exists projects (
@@ -89,6 +93,8 @@ export function migrate(db: Database.Database) {
       workflow_id text not null references workflows(id) on delete cascade,
       project_id text not null references projects(id) on delete cascade,
       status text not null,
+      runtime text not null default 'local',
+      external_run_id text,
       started_at text,
       finished_at text,
       created_at text not null
@@ -96,6 +102,7 @@ export function migrate(db: Database.Database) {
   `);
 
   migrateMessagesAgentRunForeignKey(db);
+  migrateWorkflowRunRuntimeColumns(db);
 
   db.exec(`
     create index if not exists idx_conversations_project_id on conversations(project_id);
@@ -108,7 +115,23 @@ export function migrate(db: Database.Database) {
     create index if not exists idx_workflows_project_id on workflows(project_id);
     create index if not exists idx_workflow_runs_workflow_id on workflow_runs(workflow_id);
     create index if not exists idx_workflow_runs_project_id on workflow_runs(project_id);
+    create index if not exists idx_workflow_runs_external_run_id on workflow_runs(external_run_id);
   `);
+}
+
+function migrateWorkflowRunRuntimeColumns(db: Database.Database) {
+  if (!hasTableColumn(db, "workflow_runs", "runtime")) {
+    db.exec("alter table workflow_runs add column runtime text not null default 'local'");
+  }
+
+  if (!hasTableColumn(db, "workflow_runs", "external_run_id")) {
+    db.exec("alter table workflow_runs add column external_run_id text");
+  }
+}
+
+function hasTableColumn(db: Database.Database, table: string, column: string): boolean {
+  return (db.prepare(`pragma table_info(${table})`).all() as TableInfoRow[])
+    .some((row) => row.name === column);
 }
 
 function migrateMessagesAgentRunForeignKey(db: Database.Database) {

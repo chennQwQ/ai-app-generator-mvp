@@ -191,6 +191,8 @@ export interface WorkflowDetail extends WorkflowSummary {
   graph: WorkflowGraph;
 }
 
+export type WorkflowRuntime = "local" | "apiflow";
+
 export type WorkflowRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export interface WorkflowRun {
@@ -198,6 +200,8 @@ export interface WorkflowRun {
   workflowId: string;
   projectId: string;
   status: WorkflowRunStatus;
+  runtime: WorkflowRuntime;
+  externalRunId: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;

@@ -15,6 +15,7 @@ import { TemplateService } from "./templates/template-service.js";
 import { WorkflowService } from "./workflows/workflow-service.js";
 import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { FakeApiFlowRuntimeAdapter } from "./apiflow/apiflow-adapter.js";
+import { ApiFlowBridge } from "./apiflow/apiflow-bridge.js";
 import { HttpApiFlowRuntimeAdapter } from "./apiflow/apiflow-http-adapter.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerFileRoutes } from "./routes/files.js";
@@ -41,10 +42,11 @@ export async function createServer(config: AppConfig) {
     projects.updatePreview(projectId, preview);
   });
   const apiFlowAdapter = config.workflowRuntime === "apiflow"
-    ? new FakeApiFlowRuntimeAdapter(bus)
+    ? new FakeApiFlowRuntimeAdapter()
     : config.workflowRuntime === "apiflow-http"
       ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl })
       : undefined;
+  const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter) : undefined;
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);
@@ -60,7 +62,13 @@ export async function createServer(config: AppConfig) {
   });
   await registerProjectRoutes(app, projects);
   await registerTemplateRoutes(app, templates);
-  await registerWorkflowRoutes(app, new WorkflowService(db), new WorkflowExecutor(db, bus, runner, audit, projects), apiFlowAdapter);
+  await registerWorkflowRoutes(
+    app,
+    new WorkflowService(db),
+    new WorkflowExecutor(db, bus, runner, audit, projects),
+    apiFlowAdapter,
+    apiFlowBridge
+  );
   await registerAuditRoutes(app, audit);
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);

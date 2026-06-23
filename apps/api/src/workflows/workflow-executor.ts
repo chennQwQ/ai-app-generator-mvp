@@ -41,8 +41,8 @@ export class WorkflowExecutor {
     const now = new Date().toISOString();
     const runId = nanoid();
     this.db.prepare(`
-      insert into workflow_runs (id, workflow_id, project_id, status, started_at, created_at)
-      values (?, ?, ?, 'queued', null, ?)
+      insert into workflow_runs (id, workflow_id, project_id, status, runtime, external_run_id, started_at, created_at)
+      values (?, ?, ?, 'queued', 'local', null, null, ?)
     `).run(runId, workflowId, projectId, now);
 
     const run = this.getRun(runId);
@@ -154,7 +154,7 @@ export class WorkflowExecutor {
             const url = (node.data.url as string) ?? "";
             const method = (node.data.method as string) ?? "GET";
             const response = await fetch(url, { method });
-            outputText = `HTTP ${method} ${url} → ${response.status}`;
+            outputText = `HTTP ${method} ${url} -> ${response.status}`;
             this.audit.recordLog({
               projectId,
               runId: nanoid(),
@@ -163,6 +163,9 @@ export class WorkflowExecutor {
               exitCode: response.ok ? 0 : 1,
               output: outputText
             });
+            if (!response.ok) {
+              throw new Error(outputText);
+            }
           }
 
           nodeContexts.set(node.id, outputText);
@@ -254,6 +257,8 @@ export class WorkflowExecutor {
       workflowId: row.workflow_id,
       projectId: row.project_id,
       status: row.status,
+      runtime: row.runtime ?? "local",
+      externalRunId: row.external_run_id ?? null,
       startedAt: row.started_at,
       finishedAt: row.finished_at,
       createdAt: row.created_at

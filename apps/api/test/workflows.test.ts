@@ -323,4 +323,235 @@ describe("workflow routes", () => {
 
     await app.close();
   });
+
+  it("exports an ApiFlow-compatible workflow", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-workflows-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates"),
+      WORKFLOW_RUNTIME: "apiflow"
+    });
+    const app = await createServer(config);
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project" }
+    });
+    const project = createRes.json();
+
+    const wfRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows`,
+      payload: { name: "ApiFlow WF" }
+    });
+    const workflow = wfRes.json();
+
+    const graph = {
+      nodes: [
+        { id: "input", type: "user_input", position: { x: 0, y: 0 }, data: { prompt: "hello" } },
+        { id: "http", type: "http_request", position: { x: 200, y: 0 }, data: { url: "https://example.test", method: "GET" } }
+      ],
+      edges: [
+        { id: "e1", source: "input", target: "http" }
+      ]
+    };
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}`,
+      payload: { graph }
+    });
+
+    const exportRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}/export`
+    });
+
+    expect(exportRes.statusCode).toBe(200);
+    const exported = exportRes.json();
+    expect(exported.dsl).toContain("HTTP");
+    expect(exported.entryNodeIds).toEqual(["input"]);
+    expect(exported.unsupportedNodes).toEqual([]);
+
+    await app.close();
+  });
+
+  it("rejects unsupported nodes during ApiFlow export", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-workflows-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates"),
+      WORKFLOW_RUNTIME: "apiflow"
+    });
+    const app = await createServer(config);
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project" }
+    });
+    const project = createRes.json();
+
+    const wfRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows`,
+      payload: { name: "ApiFlow WF" }
+    });
+    const workflow = wfRes.json();
+
+    const graph = {
+      nodes: [
+        { id: "agent", type: "agent_generation", position: { x: 0, y: 0 }, data: {} }
+      ],
+      edges: []
+    };
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}`,
+      payload: { graph }
+    });
+
+    const exportRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}/export`
+    });
+
+    expect(exportRes.statusCode).toBe(400);
+    expect(exportRes.json().unsupportedNodes).toEqual(["agent"]);
+
+    await app.close();
+  });
+
+  it("rejects empty workflow graphs during ApiFlow export", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-workflows-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates"),
+      WORKFLOW_RUNTIME: "apiflow"
+    });
+    const app = await createServer(config);
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project" }
+    });
+    const project = createRes.json();
+
+    const wfRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows`,
+      payload: { name: "ApiFlow WF" }
+    });
+    const workflow = wfRes.json();
+
+    const exportRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}/export`
+    });
+
+    expect(exportRes.statusCode).toBe(400);
+    expect(exportRes.json().errors).toContain("Workflow graph has no nodes");
+
+    await app.close();
+  });
+
+  it("does not export workflows across project boundaries", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-workflows-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates"),
+      WORKFLOW_RUNTIME: "apiflow"
+    });
+    const app = await createServer(config);
+
+    const projectARes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project A" }
+    });
+    const projectA = projectARes.json();
+
+    const projectBRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project B" }
+    });
+    const projectB = projectBRes.json();
+
+    const wfRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectA.id}/workflows`,
+      payload: { name: "ApiFlow WF" }
+    });
+    const workflow = wfRes.json();
+
+    const exportRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectB.id}/workflows/${workflow.id}/export`
+    });
+
+    expect(exportRes.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it("runs workflows through ApiFlow runtime and persists the external run id", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-workflows-"));
+    const config = loadConfig({
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates"),
+      WORKFLOW_RUNTIME: "apiflow"
+    });
+    const app = await createServer(config);
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "ApiFlow Project" }
+    });
+    const project = createRes.json();
+
+    const wfRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows`,
+      payload: { name: "ApiFlow WF" }
+    });
+    const workflow = wfRes.json();
+
+    const graph = {
+      nodes: [
+        { id: "input", type: "user_input", position: { x: 0, y: 0 }, data: { prompt: "hello" } }
+      ],
+      edges: []
+    };
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}`,
+      payload: { graph }
+    });
+
+    const runRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/workflows/${workflow.id}/run`
+    });
+
+    expect(runRes.statusCode).toBe(202);
+    const run = runRes.json();
+    expect(run.workflowId).toBe(workflow.id);
+    expect(run.projectId).toBe(project.id);
+    expect(run.runtime).toBe("apiflow");
+    expect(run.externalRunId).toMatch(/^apiflow-fake-/);
+    expect(run.status).toBe("queued");
+
+    await app.close();
+  });
 });

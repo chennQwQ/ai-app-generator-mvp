@@ -1,6 +1,16 @@
 import type { WorkflowGraph } from "@ai-app-generator/shared";
 import { apiFlowCompatibleNodeTypes } from "@ai-app-generator/shared";
 
+export class ApiFlowExportValidationError extends Error {
+  constructor(
+    public readonly errors: string[],
+    public readonly unsupportedNodes: string[]
+  ) {
+    super(errors.join("; "));
+    this.name = "ApiFlowExportValidationError";
+  }
+}
+
 export class DslCompiler {
   compile(graph: WorkflowGraph): string {
     const lines: string[] = [];

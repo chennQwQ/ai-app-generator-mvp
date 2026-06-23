@@ -8,13 +8,16 @@ import {
   type WorkflowService
 } from "../workflows/workflow-service.js";
 import { WorkflowRunActiveError, type WorkflowExecutor } from "../workflows/workflow-executor.js";
+import type { ApiFlowBridge } from "../apiflow/apiflow-bridge.js";
 import type { ApiFlowRuntimeAdapter } from "../apiflow/apiflow-adapter.js";
+import { ApiFlowExportValidationError } from "../apiflow/dsl-compiler.js";
 
 export async function registerWorkflowRoutes(
   app: FastifyInstance,
   workflows: WorkflowService,
   executor?: WorkflowExecutor,
-  apiFlowAdapter?: ApiFlowRuntimeAdapter
+  apiFlowAdapter?: ApiFlowRuntimeAdapter,
+  apiFlowBridge?: ApiFlowBridge
 ) {
   app.get("/api/projects/:projectId/workflows", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
@@ -99,11 +102,19 @@ export async function registerWorkflowRoutes(
   });
 
   app.post("/api/projects/:projectId/workflows/:workflowId/run", async (request, reply) => {
-    const { workflowId } = request.params as { workflowId: string };
-    if (!executor) {
+    const { projectId, workflowId } = request.params as { projectId: string; workflowId: string };
+    if (!executor && !apiFlowBridge) {
       return reply.code(500).send({ message: "Workflow executor not configured" });
     }
     try {
+      const workflow = workflows.getWorkflowForProject(projectId, workflowId);
+      if (apiFlowBridge) {
+        const run = await apiFlowBridge.startRun(workflow);
+        return reply.code(202).send(run);
+      }
+      if (!executor) {
+        return reply.code(500).send({ message: "Workflow executor not configured" });
+      }
       const run = await executor.execute(workflowId);
       return reply.code(202).send(run);
     } catch (error) {
@@ -119,12 +130,12 @@ export async function registerWorkflowRoutes(
   });
 
   app.post("/api/projects/:projectId/workflows/:workflowId/export", async (request, reply) => {
-    const { workflowId } = request.params as { workflowId: string };
+    const { projectId, workflowId } = request.params as { projectId: string; workflowId: string };
     if (!apiFlowAdapter) {
       return reply.code(500).send({ message: "ApiFlow adapter not configured" });
     }
     try {
-      const workflow = workflows.getWorkflow(workflowId);
+      const workflow = workflows.getWorkflowForProject(projectId, workflowId);
       const result = await apiFlowAdapter.exportWorkflow({
         projectId: workflow.projectId,
         workflowId: workflow.id,
@@ -136,11 +147,12 @@ export async function registerWorkflowRoutes(
       if (error instanceof WorkflowNotFoundError) {
         return reply.code(404).send({ message: "Workflow not found" });
       }
-      if (error instanceof Error) {
-        const message = error.message;
-        if (message.includes("unsupported") || message.includes("cycles")) {
-          return reply.code(400).send({ message });
-        }
+      if (error instanceof ApiFlowExportValidationError) {
+        return reply.code(400).send({
+          message: error.message,
+          errors: error.errors,
+          unsupportedNodes: error.unsupportedNodes
+        });
       }
       request.log.error({ err: error }, "Workflow export failed");
       return reply.code(500).send({ message: "Workflow export failed" });

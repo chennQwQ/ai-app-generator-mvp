@@ -1,6 +1,6 @@
 import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
-import type { EventBus } from "../events/event-bus.js";
-import { DslCompiler } from "./dsl-compiler.js";
+import { nanoid } from "nanoid";
+import { ApiFlowExportValidationError, DslCompiler } from "./dsl-compiler.js";
 
 export interface ApiFlowRuntimeAdapter {
   exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult>;
@@ -14,12 +14,10 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   private readonly runs = new Map<string, ApiFlowExternalRun>();
   private readonly compiler = new DslCompiler();
 
-  constructor(private readonly bus: EventBus) {}
-
   async exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult> {
     const validation = this.compiler.validateForExport(input.graph);
     if (!validation.valid) {
-      throw new Error(validation.errors.join("; "));
+      throw new ApiFlowExportValidationError(validation.errors, validation.unsupportedNodes);
     }
     return {
       version: 1,
@@ -34,7 +32,8 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    const externalRunId = `apiflow-fake-${input.workflowId}-${Date.now()}`;
+    await this.exportWorkflow(input);
+    const externalRunId = `apiflow-fake-${input.workflowId}-${nanoid()}`;
     const now = new Date().toISOString();
     const run: ApiFlowExternalRun = {
       externalRunId,
@@ -48,56 +47,16 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
     };
     this.runs.set(externalRunId, run);
 
-    this.bus.publish({
-      type: "workflow.run.status",
-      projectId: input.projectId,
-      run: {
-        id: externalRunId,
-        workflowId: input.workflowId,
-        projectId: input.projectId,
-        status: "queued",
-        startedAt: null,
-        finishedAt: null,
-        createdAt: now
-      }
-    });
-
     setTimeout(() => {
       if (run.status === "cancelled") return;
       run.status = "running";
       run.startedAt = new Date().toISOString();
-      this.bus.publish({
-        type: "workflow.run.status",
-        projectId: input.projectId,
-        run: {
-          id: externalRunId,
-          workflowId: input.workflowId,
-          projectId: input.projectId,
-          status: "running",
-          startedAt: run.startedAt,
-          finishedAt: null,
-          createdAt: run.createdAt
-        }
-      });
 
       setTimeout(() => {
         if (run.status === "cancelled") return;
         run.status = "succeeded";
         run.finishedAt = new Date().toISOString();
         run.result = "Fake ApiFlow execution completed";
-        this.bus.publish({
-          type: "workflow.run.status",
-          projectId: input.projectId,
-          run: {
-            id: externalRunId,
-            workflowId: input.workflowId,
-            projectId: input.projectId,
-            status: "succeeded",
-            startedAt: run.startedAt,
-            finishedAt: run.finishedAt,
-            createdAt: run.createdAt
-          }
-        });
       }, 500);
     }, 100);
 

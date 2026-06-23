@@ -29,6 +29,64 @@ describe("database schema", () => {
       expect(tables).toContain("audit_logs");
       expect(tables).toContain("workflows");
       expect(tables).toContain("workflow_runs");
+
+      const workflowRunColumns = db
+        .prepare("pragma table_info(workflow_runs)")
+        .all()
+        .map((row: any) => row.name);
+      expect(workflowRunColumns).toContain("runtime");
+      expect(workflowRunColumns).toContain("external_run_id");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("migrates legacy workflow runs with runtime metadata", () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-db-"));
+    const filePath = path.join(tempDir, "app.sqlite");
+    const legacyDb = new Database(filePath);
+    legacyDb.exec(`
+      create table projects (
+        id text primary key,
+        name text not null,
+        slug text not null unique,
+        workspace_path text not null,
+        status text not null,
+        preview_port integer,
+        preview_status text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create table workflows (
+        id text primary key,
+        project_id text not null references projects(id) on delete cascade,
+        name text not null,
+        graph text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      create table workflow_runs (
+        id text primary key,
+        workflow_id text not null references workflows(id) on delete cascade,
+        project_id text not null references projects(id) on delete cascade,
+        status text not null,
+        started_at text,
+        finished_at text,
+        created_at text not null
+      );
+    `);
+    legacyDb.close();
+
+    const db = openDatabase(filePath);
+    try {
+      const workflowRunColumns = db
+        .prepare("pragma table_info(workflow_runs)")
+        .all()
+        .map((row: any) => row.name);
+      expect(workflowRunColumns).toContain("runtime");
+      expect(workflowRunColumns).toContain("external_run_id");
     } finally {
       db.close();
     }

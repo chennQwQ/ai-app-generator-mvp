@@ -47,7 +47,6 @@ describe("App", () => {
       vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         const pathname = new URL(url).pathname;
-        const urlBase = pathname + (new URL(url).search || "");
 
         const override = responseOverrides.get(pathname);
         if (override) return override(url, _init);

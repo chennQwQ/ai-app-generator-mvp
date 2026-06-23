@@ -14,7 +14,8 @@ export async function registerProjectRoutes(app: FastifyInstance, projects: Proj
       if (search || sort !== "created" || order !== "desc" || limit !== 50 || offset !== 0) {
         return projects.listProjectsFiltered({ search, sort, order, limit, offset });
       }
-      return { projects: projects.listProjects(), total: projects.listProjects().length };
+      const all = projects.listProjects();
+      return { projects: all, total: all.length };
     } catch (error) {
       request.log.error({ err: error }, "Project listing failed");
       return reply.code(500).send({ message: "Project listing failed" });

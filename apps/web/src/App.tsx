@@ -497,29 +497,13 @@ export function App() {
   return (
     <main className="studio-shell">
       <header className="studio-header">
-        <div>
-          <p className="eyebrow">AI App Generator</p>
-          <h1>Studio</h1>
+        <div className="brand-strip">
+          <button className="icon-button menu-button" type="button" aria-label="Open navigation">
+            <span className="hamburger-icon" aria-hidden="true" />
+          </button>
+          <span className="brand-mark" aria-hidden="true" />
+          <strong>AI App Builder</strong>
         </div>
-        <div className="status-strip" aria-live="polite">
-          <span className={`status-dot status-${preview.status}`} />
-          <span>{preview.status}</span>
-          {preview.url ? (
-            <a href={preview.url} target="_blank" rel="noreferrer">
-              {preview.url}
-            </a>
-            ) : null}
-            <button
-              disabled={!activeProjectId || deployStatus?.status === "building"}
-              onClick={handleDeploy}
-              type="button"
-            >
-              Build
-            </button>
-            {deployStatus?.status === "succeeded" && deployStatus.url ? (
-              <a href={deployStatus.url} target="_blank" rel="noreferrer">Open</a>
-            ) : null}
-          </div>
       </header>
 
       {error ? (
@@ -540,9 +524,9 @@ export function App() {
           <div className="project-filters">
             <input
               className="project-search"
-              placeholder="Search..."
+              placeholder="Search projects..."
               value={projectSearch}
-              onChange={(e) => { setProjectSearch(e.target.value); reloadProjects(); }}
+              onChange={(e) => setProjectSearch(e.target.value)}
               aria-label="Search projects"
             />
             <select
@@ -552,7 +536,6 @@ export function App() {
                 const [sort, order] = e.target.value.split("-") as ["created" | "name", "asc" | "desc"];
                 setProjectSort(sort);
                 setProjectOrder(order);
-                reloadProjects();
               }}
               aria-label="Sort projects"
             >
@@ -598,17 +581,20 @@ export function App() {
                 onClick={() => setActiveProjectId(project.id)}
                 type="button"
               >
-                <span>{project.name}</span>
-                <small>
-                  {project.status} / {project.previewStatus}
-                </small>
+                <span className={`project-state-dot status-${project.previewStatus}`} aria-hidden="true" />
+                <span className="project-item-copy">
+                  <span>{project.name}</span>
+                  <small>
+                    {project.status} / {project.previewStatus}
+                  </small>
+                </span>
                 <span
-                  className="delete-project-btn"
+                  className="project-menu-btn"
                   onClick={(event) => handleDeleteProject(project.id, event)}
                   role="button"
                   aria-label="Delete project"
                 >
-                  ×
+                  ...
                 </span>
               </button>
             ))
@@ -645,6 +631,7 @@ export function App() {
               rows={5}
             />
             <button disabled={!activeProjectId || isSending} type="submit">
+              <span className="send-icon" aria-hidden="true" />
               {isSending ? "Sending..." : "Send"}
             </button>
           </form>
@@ -652,28 +639,25 @@ export function App() {
 
         <section className="panel workspace-panel" aria-label="Workspace">
           <div className="panel-heading">
-            <h2>Workspace</h2>
-            {workspaceTab !== "preview" && (
-              preview.status === "running" ? (
-                <button disabled={!activeProjectId} onClick={handleStopPreview} type="button">
-                  Stop Preview
-                </button>
-              ) : (
-                <button disabled={!activeProjectId || preview.status === "starting"} onClick={handleStartPreview} type="button">
-                  Start Preview
-                </button>
-              )
-            )}
-            {workspaceTab === "preview" && preview.status === "running" ? (
+            <div className="workspace-title">
+              <h2>Workspace</h2>
+              <span className="sr-only">{preview.status}</span>
+              {preview.url ? (
+                <a className="sr-only" href={preview.url} target="_blank" rel="noreferrer">
+                  {preview.url}
+                </a>
+              ) : null}
+            </div>
+            {preview.status === "running" ? (
               <button disabled={!activeProjectId} onClick={handleStopPreview} type="button">
                 Stop Preview
               </button>
-            ) : null}
-            {workspaceTab === "preview" && preview.status !== "running" ? (
+            ) : (
               <button disabled={!activeProjectId || preview.status === "starting"} onClick={handleStartPreview} type="button">
+                <span className="play-icon" aria-hidden="true" />
                 Start Preview
               </button>
-            ) : null}
+            )}
           </div>
 
           <div className="workspace-tabs">
@@ -867,6 +851,7 @@ interface FileTreeNodeProps {
 
 function FileTreeNode({ node, selectedPath, onSelect }: FileTreeNodeProps) {
   const isDirectory = node.type === "directory";
+  const iconLabel = isDirectory ? "/" : getFileIconLabel(node.name);
 
   return (
     <li>
@@ -876,7 +861,7 @@ function FileTreeNode({ node, selectedPath, onSelect }: FileTreeNodeProps) {
         onClick={() => onSelect(node.path)}
         type="button"
       >
-        <span aria-hidden="true">{isDirectory ? "/" : "-"}</span>
+        <span className="file-icon" aria-hidden="true">{iconLabel}</span>
         {node.name}
       </button>
       {isDirectory && node.children?.length ? (
@@ -884,6 +869,13 @@ function FileTreeNode({ node, selectedPath, onSelect }: FileTreeNodeProps) {
       ) : null}
     </li>
   );
+}
+
+function getFileIconLabel(fileName: string): string {
+  if (/\.(tsx?|jsx?|html)$/i.test(fileName)) return "<>";
+  if (/\.css$/i.test(fileName)) return "#";
+  if (/\.json$/i.test(fileName)) return "{}";
+  return "{}";
 }
 
 function parseProjectEvent(data: string): ProjectEvent | null {

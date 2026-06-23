@@ -202,6 +202,102 @@ describe("OpenCodeAgentRunner", () => {
       restoreEnv("PATHEXT", originalPathExt);
     }
   });
+
+  it.skipIf(process.platform !== "win32")("uses Windows command resolution for health checks", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-health-"));
+    const commandPath = path.join(tempDir, "opencode.cmd");
+    const cliPath = path.join(tempDir, "opencode-health-target.cjs");
+    const recordPath = path.join(tempDir, "health-argv.json");
+    writeFileSync(
+      cliPath,
+      [
+        "const fs = require('node:fs');",
+        `fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));`,
+        "if (process.argv.includes('--version')) {",
+        "  console.log('opencode-test 1.0.0');",
+        "  process.exit(0);",
+        "}",
+        "process.exit(2);"
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      commandPath,
+      ["@echo off", `node "${cliPath}" %*`].join("\r\n"),
+      "utf8"
+    );
+    const originalPath = process.env.PATH;
+    const originalPathExt = process.env.PATHEXT;
+    process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ""}`;
+    process.env.PATHEXT = ".CMD;.EXE;.BAT;.COM";
+    const runner = new OpenCodeAgentRunner(
+      {
+        ...fakeConfig(tempDir),
+        agentProvider: "opencode",
+        opencodeCommand: "opencode --shim-flag"
+      },
+      new EventBus()
+    );
+
+    try {
+      await expect(runner.healthCheck()).resolves.toEqual({ ok: true });
+      const recorded = JSON.parse(readFileSync(recordPath, "utf8")) as {
+        cwd: string;
+        args: string[];
+      };
+      expect(recorded.cwd).toBe(tempDir);
+      expect(recorded.args).toEqual(["--shim-flag", "--version"]);
+    } finally {
+      restoreEnv("PATH", originalPath);
+      restoreEnv("PATHEXT", originalPathExt);
+    }
+  });
+
+  it.skipIf(process.platform !== "win32")("cancels a Windows shim process tree", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-cancel-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    mkdirSync(workspacePath);
+    const commandPath = path.join(tempDir, "opencode.cmd");
+    const cliPath = path.join(tempDir, "opencode-long-running.cjs");
+    const pidPath = path.join(tempDir, "child.pid");
+    writeFileSync(
+      cliPath,
+      [
+        "const fs = require('node:fs');",
+        `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
+        "setInterval(() => {}, 1000);"
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      commandPath,
+      ["@echo off", `node "${cliPath}" %*`].join("\r\n"),
+      "utf8"
+    );
+    const runner = new OpenCodeAgentRunner(
+      {
+        ...fakeConfig(tempDir),
+        agentProvider: "opencode",
+        opencodeCommand: `"${commandPath}"`
+      },
+      new EventBus()
+    );
+
+    const runPromise = runner.run({
+      projectId: "project-1",
+      runId: "run-1",
+      workspacePath,
+      prompt: "Build slowly",
+      onLog: () => {}
+    });
+    const childPid = Number(await waitForFileText(pidPath));
+
+    runner.cancel("run-1");
+    const result = await runPromise;
+
+    expect(result.exitCode).not.toBe(0);
+    await waitFor(() => !isProcessRunning(childPid));
+  });
 });
 
 function restoreEnv(name: string, value: string | undefined): void {
@@ -211,6 +307,40 @@ function restoreEnv(name: string, value: string | undefined): void {
   }
 
   process.env[name] = value;
+}
+
+async function waitForFileText(filePath: string): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    try {
+      return readFileSync(filePath, "utf8");
+    } catch (error) {
+      lastError = error;
+      await delay(20);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Timed out reading ${filePath}`);
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await delay(20);
+  }
+  throw new Error("Timed out waiting for condition");
+}
+
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function fakeConfig(root: string): AppConfig {

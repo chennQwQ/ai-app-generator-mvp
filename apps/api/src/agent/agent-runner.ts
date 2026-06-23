@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentLogStream } from "@ai-app-generator/shared";
 import type { AppConfig } from "../config.js";
 import type { AuditService } from "../audit/audit-service.js";
@@ -156,21 +156,31 @@ export class OpenCodeAgentRunner implements AgentRunner {
 
   cancel(runId: string): void {
     const child = this.processes.get(runId);
-    if (child && !child.killed) child.kill();
+    if (child) killAgentProcess(child);
   }
 
   async healthCheck(): Promise<{ ok: boolean; reason?: string }> {
     return new Promise((resolve) => {
       try {
-        const child = spawn(this.commandName, ["--version"], {
-          windowsHide: true,
-          timeout: 5000
-        });
+        const child = spawnOpenCode(this.commandName, [...this.commandArgs, "--version"], this.config.appRoot);
+        let settled = false;
+        let timeout: ReturnType<typeof setTimeout>;
+        const settle = (result: { ok: boolean; reason?: string }) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(result);
+        };
+        timeout = setTimeout(() => {
+          killAgentProcess(child);
+          settle({ ok: false, reason: "Timed out" });
+        }, 5000);
+
         child.on("error", (error) => {
-          resolve({ ok: false, reason: error.message });
+          settle({ ok: false, reason: error.message });
         });
         child.on("close", (code) => {
-          resolve(code === 0 ? { ok: true } : { ok: false, reason: `Exited with code ${code}` });
+          settle(code === 0 ? { ok: true } : { ok: false, reason: `Exited with code ${code}` });
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
@@ -259,6 +269,20 @@ function spawnOpenCode(
     cwd: workspacePath,
     windowsHide: true
   });
+}
+
+function killAgentProcess(child: ChildProcessWithoutNullStreams): void {
+  if (child.killed) return;
+
+  if (process.platform === "win32" && child.pid) {
+    spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    return;
+  }
+
+  child.kill();
 }
 
 function resolveWindowsCommand(commandName: string, workspacePath: string): string {

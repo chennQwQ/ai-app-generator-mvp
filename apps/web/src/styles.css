@@ -303,8 +303,7 @@ a {
 }
 
 .project-search,
-.project-sort,
-.template-select {
+.project-sort {
   min-height: 40px;
 }
 

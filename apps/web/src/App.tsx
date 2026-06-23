@@ -8,7 +8,6 @@ import type {
   PreviewInfo,
   ProjectEvent,
   ProjectSummary,
-  TemplateMeta,
   WorkflowDetail,
   WorkflowNodeType,
   WorkflowRun,
@@ -29,7 +28,6 @@ import {
   listAgentRuns,
   listMessages,
   listProjects,
-  listTemplates,
   listWorkflows,
   renameWorkflow,
   runWorkflow,
@@ -69,8 +67,6 @@ export function App() {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [showIframe, setShowIframe] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState("react-vite");
-  const [availableTemplates, setAvailableTemplates] = useState<TemplateMeta[]>([]);
   const activeProjectIdRef = useRef<string | null>(null);
   const fileRequestIdRef = useRef(0);
   const logListRef = useRef<HTMLDivElement>(null);
@@ -129,10 +125,6 @@ export function App() {
   useEffect(() => {
     reloadProjects().catch((caught) => setError(errorMessage(caught)));
   }, [reloadProjects]);
-
-  useEffect(() => {
-    listTemplates().then(setAvailableTemplates).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -240,7 +232,7 @@ export function App() {
 
     try {
       setError(null);
-      const project = await createProject(name, selectedTemplate);
+      const project = await createProject(name);
       setProjects((currentProjects) => [project, ...currentProjects]);
       setActiveProjectId(project.id);
       setProjectName("Todo App");
@@ -556,18 +548,7 @@ export function App() {
               />
               <button type="submit">Create Project</button>
             </div>
-            {availableTemplates.length > 0 ? (
-              <select
-                value={selectedTemplate}
-                onChange={(e) => setSelectedTemplate(e.target.value)}
-                className="template-select"
-                aria-label="Template"
-              >
-                {availableTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            ) : null}
+
           </form>
 
           <div className="project-list" role="list">

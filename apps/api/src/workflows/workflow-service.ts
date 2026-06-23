@@ -82,6 +82,22 @@ export class WorkflowService {
     if (result.changes === 0) throw new WorkflowNotFoundError(id);
   }
 
+  renameWorkflow(id: string, name: string): WorkflowDetail {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Workflow name is required");
+    const row = this.db.prepare("select project_id from workflows where id = ?").get(id) as { project_id: string } | undefined;
+    if (!row) throw new WorkflowNotFoundError(id);
+
+    const dup = this.db.prepare(
+      "select 1 from workflows where project_id = ? and name = ? and id != ? limit 1"
+    ).get(row.project_id, trimmed, id);
+    if (dup) throw new DuplicateWorkflowNameError(trimmed);
+
+    const now = new Date().toISOString();
+    this.db.prepare("update workflows set name = ?, updated_at = ? where id = ?").run(trimmed, now, id);
+    return this.getWorkflow(id);
+  }
+
   private validateGraph(graph: WorkflowGraph): void {
     const nodeIds = new Set(graph.nodes.map((n) => n.id));
 

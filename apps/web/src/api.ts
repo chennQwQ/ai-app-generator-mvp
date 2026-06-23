@@ -142,6 +142,13 @@ export async function deleteWorkflow(projectId: string, workflowId: string): Pro
   );
 }
 
+export async function renameWorkflow(projectId: string, workflowId: string, name: string): Promise<WorkflowDetail> {
+  return request<WorkflowDetail>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/rename`,
+    { method: "PATCH", body: JSON.stringify({ name }) }
+  );
+}
+
 export async function runWorkflow(projectId: string, workflowId: string): Promise<WorkflowRun> {
   return request<WorkflowRun>(
     `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/run`,

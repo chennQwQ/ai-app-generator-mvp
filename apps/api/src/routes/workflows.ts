@@ -101,6 +101,30 @@ export async function registerWorkflowRoutes(
     }
   });
 
+  app.patch("/api/projects/:projectId/workflows/:workflowId/rename", async (request, reply) => {
+    const { workflowId } = request.params as { workflowId: string };
+    const body = request.body;
+    const name =
+      body && typeof body === "object" && "name" in body && typeof body.name === "string"
+        ? body.name.trim()
+        : "";
+    if (!name) return reply.code(400).send({ message: "Workflow name is required" });
+
+    try {
+      const workflow = workflows.renameWorkflow(workflowId, name);
+      return workflow;
+    } catch (error) {
+      if (error instanceof WorkflowNotFoundError) {
+        return reply.code(404).send({ message: "Workflow not found" });
+      }
+      if (error instanceof DuplicateWorkflowNameError) {
+        return reply.code(409).send({ message: error.message });
+      }
+      request.log.error({ err: error }, "Workflow rename failed");
+      return reply.code(500).send({ message: "Workflow rename failed" });
+    }
+  });
+
   app.post("/api/projects/:projectId/workflows/:workflowId/run", async (request, reply) => {
     const { projectId, workflowId } = request.params as { projectId: string; workflowId: string };
     if (!executor && !apiFlowBridge) {

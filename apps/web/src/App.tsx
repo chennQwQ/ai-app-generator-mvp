@@ -10,6 +10,7 @@ import type {
   ProjectSummary,
   TemplateMeta,
   WorkflowDetail,
+  WorkflowNodeType,
   WorkflowRun,
   WorkflowSummary
 } from "@ai-app-generator/shared";
@@ -30,6 +31,7 @@ import {
   listProjects,
   listTemplates,
   listWorkflows,
+  renameWorkflow,
   runWorkflow,
   sendMessage,
   startPreview,
@@ -42,6 +44,7 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import { LoadingSkeleton } from "./components/LoadingSkeleton";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { WorkflowList } from "./components/WorkflowList";
+import { WorkflowToolbar } from "./components/WorkflowToolbar";
 
 const defaultPreview: PreviewInfo = {
   status: "stopped",
@@ -374,6 +377,21 @@ export function App() {
     }
   }
 
+  function handleAddNode(type: string) {
+    if (!workflowGraph) return;
+    const newNode = {
+      id: `node-${Date.now()}`,
+      type: type as WorkflowNodeType,
+      position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
+      data: {}
+    };
+    const newGraph = {
+      nodes: [...workflowGraph.graph.nodes, newNode],
+      edges: workflowGraph.graph.edges
+    };
+    setWorkflowGraph({ ...workflowGraph, graph: newGraph, nodeCount: newGraph.nodes.length });
+  }
+
   async function handleSelectWorkflow(workflowId: string) {
     const projectId = activeProjectId;
     if (!projectId) return;
@@ -446,6 +464,20 @@ export function App() {
     } catch (caught) {
       setError(errorMessage(caught));
       setIsRunningWorkflow(false);
+    }
+  }
+
+  async function handleRenameWorkflow(workflowId: string, name: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      const wf = await renameWorkflow(projectId, workflowId, name);
+      setWorkflows((current) =>
+        current.map((w) => (w.id === workflowId ? { ...w, name: wf.name } : w))
+      );
+    } catch (caught) {
+      setError(errorMessage(caught));
     }
   }
 
@@ -746,31 +778,35 @@ export function App() {
                 onCreate={handleCreateWorkflow}
                 onDelete={handleDeleteWorkflow}
                 onRun={handleRunWorkflow}
+                onRename={handleRenameWorkflow}
                 isRunning={isRunningWorkflow}
               />
               {workflowGraph ? (
-                <>
-                  <WorkflowCanvas
-                    nodes={workflowGraph.graph.nodes.map((n) => ({
-                      id: n.id,
-                      type: n.type,
-                      position: n.position,
-                      data: n.data
-                    }))}
-                    edges={workflowGraph.graph.edges.map((e) => ({
-                      id: e.id,
-                      source: e.source,
-                      target: e.target
-                    }))}
-                    onGraphChange={handleGraphChange}
-                  />
-                  {workflowRun ? (
-                    <div className="workflow-run-status">
-                      <span className={`status-dot status-${workflowRun.status}`} />
-                      <span>Workflow: {workflowRun.status}</span>
-                    </div>
-                  ) : null}
-                </>
+                <div className="workflow-editor-area">
+                  <WorkflowToolbar onAddNode={handleAddNode} />
+                  <div className="workflow-canvas-wrapper">
+                    <WorkflowCanvas
+                      nodes={workflowGraph.graph.nodes.map((n) => ({
+                        id: n.id,
+                        type: n.type,
+                        position: n.position,
+                        data: n.data
+                      }))}
+                      edges={workflowGraph.graph.edges.map((e) => ({
+                        id: e.id,
+                        source: e.source,
+                        target: e.target
+                      }))}
+                      onGraphChange={handleGraphChange}
+                    />
+                    {workflowRun ? (
+                      <div className="workflow-run-status">
+                        <span className={`status-dot status-${workflowRun.status}`} />
+                        <span>Workflow: {workflowRun.status}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               ) : (
                 <p className="empty-state">Select or create a workflow to begin.</p>
               )}

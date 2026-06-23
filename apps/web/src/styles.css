@@ -653,6 +653,27 @@ a {
   font-weight: 600;
 }
 
+.workflow-rename-input {
+  border: 1px solid var(--primary, #1f6feb);
+  border-radius: 4px;
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+.rename-workflow-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #66717d);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+
+.rename-workflow-btn:hover {
+  color: var(--primary, #1f6feb);
+}
+
 .workflow-nodes {
   color: var(--text-secondary, #66717d);
   font-size: 11px;
@@ -748,6 +769,64 @@ a {
   font-size: 12px;
   gap: 6px;
   padding: 4px 0;
+}
+
+.workflow-editor-area {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-height: 0;
+}
+
+.workflow-canvas-wrapper {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.workflow-toolbar {
+  border: 1px solid var(--border-color, #d7dde4);
+  border-radius: 6px;
+  padding: 8px;
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.toolbar-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.toolbar-item {
+  align-items: center;
+  background: var(--bg-secondary, #f6f8fb);
+  border: 1px solid var(--border-color, #d7dde4);
+  border-radius: 4px;
+  cursor: grab;
+  display: flex;
+  font-size: 11px;
+  gap: 6px;
+  padding: 5px 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.toolbar-item:active {
+  cursor: grabbing;
+}
+
+.toolbar-item:hover {
+  border-color: var(--primary, #1f6feb);
+}
+
+.toolbar-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
 }
 
 @media (max-width: 760px) {

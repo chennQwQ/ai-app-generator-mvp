@@ -3,8 +3,18 @@ import { ProjectNotFoundError, type ProjectService } from "../projects/project-s
 
 export async function registerProjectRoutes(app: FastifyInstance, projects: ProjectService) {
   app.get("/api/projects", async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const search = query.search ?? undefined;
+    const sort = query.sort === "name" ? "name" : "created";
+    const order = query.order === "asc" ? "asc" : "desc";
+    const limit = query.limit ? Math.min(parseInt(query.limit, 10) || 50, 100) : 50;
+    const offset = query.offset ? Math.max(parseInt(query.offset, 10) || 0, 0) : 0;
+
     try {
-      return projects.listProjects();
+      if (search || sort !== "created" || order !== "desc" || limit !== 50 || offset !== 0) {
+        return projects.listProjectsFiltered({ search, sort, order, limit, offset });
+      }
+      return { projects: projects.listProjects(), total: projects.listProjects().length };
     } catch (error) {
       request.log.error({ err: error }, "Project listing failed");
       return reply.code(500).send({ message: "Project listing failed" });

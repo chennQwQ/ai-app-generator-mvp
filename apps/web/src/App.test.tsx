@@ -47,6 +47,7 @@ describe("App", () => {
       vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         const pathname = new URL(url).pathname;
+        const urlBase = pathname + (new URL(url).search || "");
 
         const override = responseOverrides.get(pathname);
         if (override) return override(url, _init);
@@ -66,8 +67,9 @@ describe("App", () => {
           ]);
         }
 
-        if (url.endsWith("/api/projects")) {
-          return jsonResponse([
+        if (pathname.endsWith("/api/projects")) {
+          return jsonResponse({
+            projects: [
             {
               id: "project-1",
               name: "Demo Project",
@@ -90,7 +92,7 @@ describe("App", () => {
               createdAt: "2026-06-22T00:00:00.000Z",
               updatedAt: "2026-06-22T00:00:00.000Z"
             }
-          ]);
+          ], total: 2 });
         }
 
         if (url.endsWith("/api/projects/project-1/messages")) {
@@ -176,7 +178,7 @@ describe("App", () => {
         });
       }
 
-      return jsonResponse([
+      return jsonResponse({ projects: [
         {
           id: "project-1",
           name: "Demo Project",
@@ -188,7 +190,7 @@ describe("App", () => {
           createdAt: "2026-06-22T00:00:00.000Z",
           updatedAt: "2026-06-22T00:00:00.000Z"
         }
-      ]);
+      ], total: 1 });
     });
     responseOverrides.set("/api/projects/project-3/messages", () => jsonResponse([]));
     responseOverrides.set("/api/projects/project-3/files", () => jsonResponse([]));
@@ -388,7 +390,7 @@ describe("App", () => {
 
   it("stops a running preview through the preview API", async () => {
     responseOverrides.set("/api/projects", () =>
-      jsonResponse([
+      jsonResponse({ projects: [
         {
           id: "project-1",
           name: "Demo Project",
@@ -400,7 +402,7 @@ describe("App", () => {
           createdAt: "2026-06-22T00:00:00.000Z",
           updatedAt: "2026-06-22T00:00:00.000Z"
         }
-      ])
+      ], total: 1 })
     );
     responseOverrides.set("/api/projects/project-1/preview/stop", () =>
       jsonResponse({ status: "stopped", port: null, url: null })

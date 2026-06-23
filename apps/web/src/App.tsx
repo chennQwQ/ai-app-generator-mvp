@@ -79,6 +79,9 @@ export function App() {
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deployStatus, setDeployStatus] = useState<DeploymentInfo | null>(null);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [projectSort, setProjectSort] = useState<"created" | "name">("created");
+  const [projectOrder, setProjectOrder] = useState<"asc" | "desc">("desc");
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -86,11 +89,11 @@ export function App() {
   );
 
   const reloadProjects = useCallback(async () => {
-    const nextProjects = await listProjects();
-    setProjects(nextProjects);
-    setActiveProjectId((currentProjectId) => currentProjectId ?? nextProjects[0]?.id ?? null);
+    const result = await listProjects(projectSearch || undefined, projectSort, projectOrder);
+    setProjects(result.projects);
+    setActiveProjectId((currentProjectId) => currentProjectId ?? result.projects[0]?.id ?? null);
     setIsLoading(false);
-  }, []);
+  }, [projectSearch, projectSort, projectOrder]);
 
   useEffect(() => {
     if (logListRef.current) {
@@ -500,6 +503,32 @@ export function App() {
           <div className="panel-heading">
             <h2>Projects</h2>
             <span>{projects.length}</span>
+          </div>
+
+          <div className="project-filters">
+            <input
+              className="project-search"
+              placeholder="Search..."
+              value={projectSearch}
+              onChange={(e) => { setProjectSearch(e.target.value); reloadProjects(); }}
+              aria-label="Search projects"
+            />
+            <select
+              className="project-sort"
+              value={`${projectSort}-${projectOrder}`}
+              onChange={(e) => {
+                const [sort, order] = e.target.value.split("-") as ["created" | "name", "asc" | "desc"];
+                setProjectSort(sort);
+                setProjectOrder(order);
+                reloadProjects();
+              }}
+              aria-label="Sort projects"
+            >
+              <option value="created-desc">Newest</option>
+              <option value="created-asc">Oldest</option>
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+            </select>
           </div>
 
           <form className="stack" onSubmit={handleCreateProject}>

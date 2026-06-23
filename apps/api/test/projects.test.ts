@@ -43,7 +43,7 @@ describe("project routes", () => {
     expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
 
     const list = await app.inject({ method: "GET", url: "/api/projects" });
-    expect(list.json()).toHaveLength(1);
+    expect(list.json().projects).toHaveLength(1);
 
     await app.close();
   });
@@ -237,7 +237,7 @@ describe("project routes", () => {
     expect(deleteRes.statusCode).toBe(200);
 
     const listRes = await app.inject({ method: "GET", url: "/api/projects" });
-    expect(listRes.json()).toHaveLength(0);
+    expect(listRes.json().projects).toHaveLength(0);
 
     await app.close();
   });

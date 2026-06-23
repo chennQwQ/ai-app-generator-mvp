@@ -21,8 +21,15 @@ export interface SendMessageResponse {
   run: AgentRun;
 }
 
-export async function listProjects(): Promise<ProjectSummary[]> {
-  return request<ProjectSummary[]>("/api/projects");
+export async function listProjects(search?: string, sort?: string, order?: string): Promise<{ projects: ProjectSummary[]; total: number }> {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (sort) params.set("sort", sort);
+  if (order) params.set("order", order);
+  const qs = params.toString();
+  return request<{ projects: ProjectSummary[]; total: number }>(
+    `/api/projects${qs ? `?${qs}` : ""}`
+  );
 }
 
 export async function listTemplates(): Promise<TemplateMeta[]> {

@@ -53,6 +53,42 @@ export class ProjectService {
     return this.db.prepare("select * from projects order by created_at desc").all().map((row) => this.mapProject(row));
   }
 
+  listProjectsFiltered(options: {
+    search?: string;
+    sort?: "name" | "created";
+    order?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }): { projects: ProjectSummary[]; total: number } {
+    const sortColumn = options.sort === "name" ? "name" : "created_at";
+    const order = options.order === "asc" ? "asc" : "desc";
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (options.search) {
+      conditions.push("name like ?");
+      params.push(`%${options.search}%`);
+    }
+
+    const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
+
+    const totalRow = this.db.prepare(
+      `select count(*) as count from projects ${where}`
+    ).get(...params) as { count: number };
+
+    const rows = this.db.prepare(
+      `select * from projects ${where} order by ${sortColumn} ${order} limit ? offset ?`
+    ).all(...params, limit, offset);
+
+    return {
+      projects: rows.map((row) => this.mapProject(row)),
+      total: totalRow.count
+    };
+  }
+
   getProject(id: string): ProjectSummary {
     const row = this.db.prepare("select * from projects where id = ?").get(id);
     if (!row) throw new ProjectNotFoundError(id);

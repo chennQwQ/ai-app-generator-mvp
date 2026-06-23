@@ -486,6 +486,35 @@ a {
   width: 100%;
 }
 
+.project-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.project-search {
+  border: 1px solid #d7dde4;
+  border-radius: 6px;
+  color: #172026;
+  flex: 1;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.project-search::placeholder {
+  color: #a0aab4;
+}
+
+.project-sort {
+  border: 1px solid #d7dde4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172026;
+  font-size: 12px;
+  padding: 5px 6px;
+  width: 110px;
+}
+
 .show-preview-btn {
   margin-top: 10px;
 }

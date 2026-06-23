@@ -29,6 +29,7 @@ describe("database schema", () => {
       expect(tables).toContain("audit_logs");
       expect(tables).toContain("workflows");
       expect(tables).toContain("workflow_runs");
+      expect(tables).toContain("deployments");
 
       const workflowRunColumns = db
         .prepare("pragma table_info(workflow_runs)")

@@ -99,6 +99,17 @@ export function migrate(db: Database.Database) {
       finished_at text,
       created_at text not null
     );
+
+    create table if not exists deployments (
+      id text primary key,
+      project_id text not null references projects(id) on delete cascade,
+      status text not null,
+      output_dir text,
+      error_log text,
+      started_at text,
+      finished_at text,
+      created_at text not null
+    );
   `);
 
   migrateMessagesAgentRunForeignKey(db);
@@ -116,6 +127,7 @@ export function migrate(db: Database.Database) {
     create index if not exists idx_workflow_runs_workflow_id on workflow_runs(workflow_id);
     create index if not exists idx_workflow_runs_project_id on workflow_runs(project_id);
     create index if not exists idx_workflow_runs_external_run_id on workflow_runs(external_run_id);
+    create index if not exists idx_deployments_project_id on deployments(project_id);
   `);
 }
 

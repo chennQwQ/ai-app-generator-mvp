@@ -3,6 +3,7 @@ import type {
   AgentLog,
   AgentRun,
   ChatMessage,
+  DeploymentInfo,
   FileNode,
   PreviewInfo,
   ProjectEvent,
@@ -18,6 +19,8 @@ import {
   createWorkflow,
   deleteProject,
   deleteWorkflow,
+  deployProject,
+  getDeploymentStatus,
   getFileContent,
   getFiles,
   getRunLogs,
@@ -75,6 +78,7 @@ export function App() {
   const [workflowRun, setWorkflowRun] = useState<WorkflowRun | null>(null);
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deployStatus, setDeployStatus] = useState<DeploymentInfo | null>(null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -200,6 +204,9 @@ export function App() {
       }
       if (event.type === "workflow.node.status") {
         // node status updates received in real-time
+      }
+      if (event.type === "deploy.status") {
+        setDeployStatus(event.deploy);
       }
     };
     socket.onerror = () => {
@@ -439,6 +446,19 @@ export function App() {
     }
   }
 
+  async function handleDeploy() {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      setDeployStatus({ projectId, status: "building", url: null, errorLog: null, startedAt: null, finishedAt: null });
+      const info = await deployProject(projectId);
+      setDeployStatus(info);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
   return (
     <main className="studio-shell">
       <header className="studio-header">
@@ -453,8 +473,18 @@ export function App() {
             <a href={preview.url} target="_blank" rel="noreferrer">
               {preview.url}
             </a>
-          ) : null}
-        </div>
+            ) : null}
+            <button
+              disabled={!activeProjectId || deployStatus?.status === "building"}
+              onClick={handleDeploy}
+              type="button"
+            >
+              Build
+            </button>
+            {deployStatus?.status === "succeeded" && deployStatus.url ? (
+              <a href={deployStatus.url} target="_blank" rel="noreferrer">Open</a>
+            ) : null}
+          </div>
       </header>
 
       {error ? (

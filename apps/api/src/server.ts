@@ -1,7 +1,9 @@
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
+import fastifyStatic from "@fastify/static";
 import type { AppConfig } from "./config.js";
 import { createAgentRunner } from "./agent/agent-runner.js";
 import { AuditService } from "./audit/audit-service.js";
@@ -17,7 +19,9 @@ import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { FakeApiFlowRuntimeAdapter } from "./apiflow/apiflow-adapter.js";
 import { ApiFlowBridge } from "./apiflow/apiflow-bridge.js";
 import { HttpApiFlowRuntimeAdapter } from "./apiflow/apiflow-http-adapter.js";
+import { DeploymentService } from "./deployments/deployment-service.js";
 import { registerAuditRoutes } from "./routes/audit.js";
+import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
@@ -47,9 +51,16 @@ export async function createServer(config: AppConfig) {
       ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl })
       : undefined;
   const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter) : undefined;
+  const deployments = new DeploymentService(db, config, bus, projects);
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);
+  mkdirSync(path.join(config.storageDir, "deployments"), { recursive: true });
+  await app.register(fastifyStatic, {
+    root: path.join(config.storageDir, "deployments"),
+    prefix: "/deploy/",
+    decorateReply: false
+  });
 
   app.addHook("onClose", async () => {
     previewManager.stopAll();
@@ -74,6 +85,7 @@ export async function createServer(config: AppConfig) {
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);
+  await registerDeployRoutes(app, projects, deployments);
   await registerWebSocketRoutes(app, bus);
 
   return app;

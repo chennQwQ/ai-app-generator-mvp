@@ -79,7 +79,8 @@ export type ProjectEvent =
   | { type: "preview.status"; projectId: string; preview: PreviewInfo }
   | { type: "error"; projectId: string; message: string }
   | { type: "workflow.run.status"; projectId: string; run: WorkflowRun }
-  | { type: "workflow.node.status"; projectId: string; nodeId: string; status: string };
+  | { type: "workflow.node.status"; projectId: string; nodeId: string; status: string }
+  | { type: "deploy.status"; projectId: string; deploy: DeploymentInfo };
 
 export function isTerminalRunStatus(status: AgentRunStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
@@ -254,4 +255,15 @@ export interface ApiFlowExternalRun {
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
+}
+
+export type DeploymentStatus = "building" | "succeeded" | "failed";
+
+export interface DeploymentInfo {
+  projectId: string;
+  status: DeploymentStatus;
+  url: string | null;
+  errorLog: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
 }

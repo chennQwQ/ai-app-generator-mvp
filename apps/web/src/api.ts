@@ -2,6 +2,7 @@ import type {
   AgentLog,
   AgentRun,
   ChatMessage,
+  DeploymentInfo,
   FileNode,
   PreviewInfo,
   ProjectSummary,
@@ -138,6 +139,19 @@ export async function runWorkflow(projectId: string, workflowId: string): Promis
   return request<WorkflowRun>(
     `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/run`,
     { method: "POST" }
+  );
+}
+
+export async function deployProject(projectId: string): Promise<DeploymentInfo> {
+  return request<DeploymentInfo>(
+    `/api/projects/${encodeURIComponent(projectId)}/deploy`,
+    { method: "POST" }
+  );
+}
+
+export async function getDeploymentStatus(projectId: string): Promise<DeploymentInfo> {
+  return request<DeploymentInfo>(
+    `/api/projects/${encodeURIComponent(projectId)}/deploy`
   );
 }
 

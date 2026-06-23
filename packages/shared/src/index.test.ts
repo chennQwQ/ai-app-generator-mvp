@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTerminalRunStatus, projectEventTypes, toolDefinitions, getToolDefinition } from "./index.js";
+import { isTerminalRunStatus, isTerminalWorkflowRunStatus, projectEventTypes, workflowNodeTypes, workflowEventTypes, toolDefinitions, getToolDefinition } from "./index.js";
 
 describe("shared domain helpers", () => {
   it("identifies terminal run statuses", () => {
@@ -62,5 +62,24 @@ describe("shared domain helpers", () => {
     expect(getToolDefinition("npm_build")?.parameters).toContainEqual(
       expect.objectContaining({ name: "script", type: "string", default: "build" })
     );
+  });
+
+  it("identifies terminal workflow run statuses", () => {
+    expect(isTerminalWorkflowRunStatus("succeeded")).toBe(true);
+    expect(isTerminalWorkflowRunStatus("failed")).toBe(true);
+    expect(isTerminalWorkflowRunStatus("cancelled")).toBe(true);
+    expect(isTerminalWorkflowRunStatus("running")).toBe(false);
+    expect(isTerminalWorkflowRunStatus("queued")).toBe(false);
+  });
+
+  it("lists workflow node types", () => {
+    expect(workflowNodeTypes).toEqual(["user_input", "agent_generation", "shell_command"]);
+  });
+
+  it("lists workflow websocket event types", () => {
+    expect(workflowEventTypes).toEqual([
+      "workflow.run.status",
+      "workflow.node.status"
+    ]);
   });
 });

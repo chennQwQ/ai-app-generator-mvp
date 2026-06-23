@@ -77,7 +77,9 @@ export type ProjectEvent =
   | { type: "run.log"; projectId: string; log: AgentLog }
   | { type: "files.changed"; projectId: string }
   | { type: "preview.status"; projectId: string; preview: PreviewInfo }
-  | { type: "error"; projectId: string; message: string };
+  | { type: "error"; projectId: string; message: string }
+  | { type: "workflow.run.status"; projectId: string; run: WorkflowRun }
+  | { type: "workflow.node.status"; projectId: string; nodeId: string; status: string };
 
 export function isTerminalRunStatus(status: AgentRunStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
@@ -151,3 +153,63 @@ export interface AuditLog {
   output: string | null;
   createdAt: string;
 }
+
+export const workflowNodeTypes = ["user_input", "agent_generation", "shell_command"] as const;
+
+export type WorkflowNodeType = (typeof workflowNodeTypes)[number];
+
+export interface WorkflowNode {
+  id: string;
+  type: WorkflowNodeType;
+  position: { x: number; y: number };
+  data: Record<string, unknown>;
+}
+
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
+export interface WorkflowSummary {
+  id: string;
+  projectId: string;
+  name: string;
+  nodeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowDetail extends WorkflowSummary {
+  graph: WorkflowGraph;
+}
+
+export type WorkflowRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface WorkflowRun {
+  id: string;
+  workflowId: string;
+  projectId: string;
+  status: WorkflowRunStatus;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export function isTerminalWorkflowRunStatus(status: WorkflowRunStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+export const workflowEventTypes = [
+  "workflow.run.status",
+  "workflow.node.status"
+] as const;
+
+export type WorkflowEventType = (typeof workflowEventTypes)[number];

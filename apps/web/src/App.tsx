@@ -7,27 +7,38 @@ import type {
   PreviewInfo,
   ProjectEvent,
   ProjectSummary,
-  TemplateMeta
+  TemplateMeta,
+  WorkflowDetail,
+  WorkflowRun,
+  WorkflowSummary
 } from "@ai-app-generator/shared";
 import {
   cancelRun,
   createProject,
+  createWorkflow,
   deleteProject,
+  deleteWorkflow,
   getFileContent,
   getFiles,
   getRunLogs,
+  getWorkflow,
   listAgentRuns,
   listMessages,
   listProjects,
   listTemplates,
+  listWorkflows,
+  runWorkflow,
   sendMessage,
   startPreview,
   stopPreview,
+  updateWorkflowGraph,
   wsBase
 } from "./api";
 import { Editor } from "./components/Editor";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { LoadingSkeleton } from "./components/LoadingSkeleton";
+import { WorkflowCanvas } from "./components/WorkflowCanvas";
+import { WorkflowList } from "./components/WorkflowList";
 
 const defaultPreview: PreviewInfo = {
   status: "stopped",
@@ -57,6 +68,13 @@ export function App() {
   const activeProjectIdRef = useRef<string | null>(null);
   const fileRequestIdRef = useRef(0);
   const logListRef = useRef<HTMLDivElement>(null);
+  const [workspaceTab, setWorkspaceTab] = useState<"files" | "workflow" | "preview">("files");
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+  const [workflowGraph, setWorkflowGraph] = useState<WorkflowDetail | null>(null);
+  const [workflowRun, setWorkflowRun] = useState<WorkflowRun | null>(null);
+  const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -82,6 +100,17 @@ export function App() {
     return nextFiles;
   }, []);
 
+  const loadWorkflows = useCallback(async () => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    try {
+      const wfs = await listWorkflows(projectId);
+      if (activeProjectIdRef.current === projectId) setWorkflows(wfs);
+    } catch {
+      // workflows are optional
+    }
+  }, []);
+
   useEffect(() => {
     activeProjectIdRef.current = activeProjectId;
     fileRequestIdRef.current += 1;
@@ -105,6 +134,10 @@ export function App() {
       setSelectedPath(null);
       setFileContent("");
       setPreview(defaultPreview);
+      setWorkflows([]);
+      setActiveWorkflowId(null);
+      setWorkflowGraph(null);
+      setWorkflowRun(null);
       return;
     }
 
@@ -130,6 +163,7 @@ export function App() {
           port: activeProject?.previewPort ?? null,
           url: activeProject?.previewUrl ?? null
         });
+        loadWorkflows().catch(() => {});
       } catch (caught) {
         if (!cancelled) setError(errorMessage(caught));
       }
@@ -159,6 +193,13 @@ export function App() {
       }
       if (event.type === "error") {
         setError(event.message);
+      }
+      if (event.type === "workflow.run.status") {
+        setWorkflowRun(event.run);
+        setIsRunningWorkflow(event.run.status === "queued" || event.run.status === "running");
+      }
+      if (event.type === "workflow.node.status") {
+        // node status updates received in real-time
       }
     };
     socket.onerror = () => {
@@ -308,6 +349,96 @@ export function App() {
     }
   }
 
+  async function handleCreateWorkflow() {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      const count = workflows.length + 1;
+      const wf = await createWorkflow(projectId, `Workflow ${count}`);
+      setWorkflows((current) => [wf, ...current]);
+      setActiveWorkflowId(wf.id);
+      setWorkflowGraph(wf);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleSelectWorkflow(workflowId: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      setActiveWorkflowId(workflowId);
+      const wf = await getWorkflow(projectId, workflowId);
+      setWorkflowGraph(wf);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleDeleteWorkflow(workflowId: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      await deleteWorkflow(projectId, workflowId);
+      setWorkflows((current) => current.filter((w) => w.id !== workflowId));
+      if (activeWorkflowId === workflowId) {
+        setActiveWorkflowId(null);
+        setWorkflowGraph(null);
+      }
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleGraphChange(nodes: unknown[], edges: unknown[]) {
+    const projectId = activeProjectId;
+    const workflowId = activeWorkflowId;
+    if (!projectId || !workflowId) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const graph = {
+          nodes: nodes.map((n: any) => ({
+            id: n.id,
+            type: n.type ?? "user_input",
+            position: n.position,
+            data: n.data ?? {}
+          })),
+          edges: edges.map((e: any) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target
+          }))
+        };
+        const wf = await updateWorkflowGraph(projectId, workflowId, graph);
+        setWorkflowGraph(wf);
+        setWorkflows((current) =>
+          current.map((w) => (w.id === workflowId ? { ...w, nodeCount: wf.nodeCount, updatedAt: wf.updatedAt } : w))
+        );
+      } catch {
+        // best-effort auto-save
+      }
+    }, 800);
+  }
+
+  async function handleRunWorkflow(workflowId: string) {
+    const projectId = activeProjectId;
+    if (!projectId) return;
+    try {
+      setError(null);
+      setIsRunningWorkflow(true);
+      const run = await runWorkflow(projectId, workflowId);
+      setWorkflowRun(run);
+    } catch (caught) {
+      setError(errorMessage(caught));
+      setIsRunningWorkflow(false);
+    }
+  }
+
   return (
     <main className="studio-shell">
       <header className="studio-header">
@@ -431,90 +562,181 @@ export function App() {
         <section className="panel workspace-panel" aria-label="Workspace">
           <div className="panel-heading">
             <h2>Workspace</h2>
-            {preview.status === "running" ? (
+            {workspaceTab !== "preview" && (
+              preview.status === "running" ? (
+                <button disabled={!activeProjectId} onClick={handleStopPreview} type="button">
+                  Stop Preview
+                </button>
+              ) : (
+                <button disabled={!activeProjectId || preview.status === "starting"} onClick={handleStartPreview} type="button">
+                  Start Preview
+                </button>
+              )
+            )}
+            {workspaceTab === "preview" && preview.status === "running" ? (
               <button disabled={!activeProjectId} onClick={handleStopPreview} type="button">
                 Stop Preview
               </button>
-            ) : (
+            ) : null}
+            {workspaceTab === "preview" && preview.status !== "running" ? (
               <button disabled={!activeProjectId || preview.status === "starting"} onClick={handleStartPreview} type="button">
                 Start Preview
               </button>
-            )}
+            ) : null}
           </div>
 
-          <div className="workspace-layout">
-            <nav className="file-tree" aria-label="Files">
-              {files.length > 0 ? (
-                <FileTree nodes={files} selectedPath={selectedPath} onSelect={handleSelectFile} />
-              ) : (
-                <p className="empty-state">No files yet.</p>
-              )}
-            </nav>
-
-            <div className="file-viewer">
-              <div className="file-title">{selectedPath ?? "Select a file"}</div>
-              {selectedPath && fileContent ? (
-                <Editor value={fileContent} path={selectedPath} />
-              ) : (
-                <pre>File content will appear here.</pre>
-              )}
-            </div>
-          </div>
-
-          {preview.status === "running" ? (
-            <button className="show-preview-btn" onClick={() => setShowIframe((v) => !v)} type="button">
-              {showIframe ? "Hide Preview" : "Show Preview"}
+          <div className="workspace-tabs">
+            <button
+              className={workspaceTab === "files" ? "tab active" : "tab"}
+              onClick={() => setWorkspaceTab("files")}
+              type="button"
+            >
+              Files
             </button>
-          ) : null}
-          {showIframe && preview.url ? (
-            <iframe className="preview-iframe" src={preview.url} title="Preview" />
-          ) : null}
+            <button
+              className={workspaceTab === "workflow" ? "tab active" : "tab"}
+              onClick={() => { setWorkspaceTab("workflow"); loadWorkflows(); }}
+              type="button"
+            >
+              Workflow
+            </button>
+            <button
+              className={workspaceTab === "preview" ? "tab active" : "tab"}
+              onClick={() => setWorkspaceTab("preview")}
+              type="button"
+            >
+              Preview
+            </button>
+          </div>
 
-          <section className="run-history" aria-label="Run history">
-            <div className="panel-heading compact">
-              <h3>Run History</h3>
-              <span>{runs.length}</span>
-            </div>
-            <div className="run-list">
-              {runs.map((run) => (
-                <button
-                  className={run.id === selectedRunId ? "run-item active" : "run-item"}
-                  key={run.id}
-                  onClick={() => handleSelectRun(run.id)}
-                  type="button"
-                >
-                  <span className={`status-dot status-${run.status}`} />
-                  <span className="run-summary">{run.prompt.slice(0, 60)}{run.prompt.length > 60 ? "…" : ""}</span>
-                  <small className="run-status">{run.status}</small>
-                  {(run.status === "queued" || run.status === "running") ? (
+          {workspaceTab === "files" && (
+            <>
+              <div className="workspace-layout">
+                <nav className="file-tree" aria-label="Files">
+                  {files.length > 0 ? (
+                    <FileTree nodes={files} selectedPath={selectedPath} onSelect={handleSelectFile} />
+                  ) : (
+                    <p className="empty-state">No files yet.</p>
+                  )}
+                </nav>
+
+                <div className="file-viewer">
+                  <div className="file-title">{selectedPath ?? "Select a file"}</div>
+                  {selectedPath && fileContent ? (
+                    <Editor value={fileContent} path={selectedPath} />
+                  ) : (
+                    <pre>File content will appear here.</pre>
+                  )}
+                </div>
+              </div>
+
+              <section className="run-history" aria-label="Run history">
+                <div className="panel-heading compact">
+                  <h3>Run History</h3>
+                  <span>{runs.length}</span>
+                </div>
+                <div className="run-list">
+                  {runs.map((run) => (
                     <button
-                      className="cancel-run-btn"
-                      onClick={(e) => { e.stopPropagation(); handleCancelRun(run.id); }}
+                      className={run.id === selectedRunId ? "run-item active" : "run-item"}
+                      key={run.id}
+                      onClick={() => handleSelectRun(run.id)}
                       type="button"
                     >
-                      Cancel
+                      <span className={`status-dot status-${run.status}`} />
+                      <span className="run-summary">{run.prompt.slice(0, 60)}{run.prompt.length > 60 ? "…" : ""}</span>
+                      <small className="run-status">{run.status}</small>
+                      {(run.status === "queued" || run.status === "running") ? (
+                        <button
+                          className="cancel-run-btn"
+                          onClick={(e) => { e.stopPropagation(); handleCancelRun(run.id); }}
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
                     </button>
-                  ) : null}
-                </button>
-              ))}
-              {runs.length === 0 ? <p className="empty-state">No runs yet.</p> : null}
-            </div>
-          </section>
+                  ))}
+                  {runs.length === 0 ? <p className="empty-state">No runs yet.</p> : null}
+                </div>
+              </section>
 
-          <section className="log-panel" aria-label="Run logs">
-            <div className="panel-heading compact">
-              <h3>Logs{selectedRunId ? " (historical)" : " (live)"}</h3>
-              <span>{logs.length}</span>
+              <section className="log-panel" aria-label="Run logs">
+                <div className="panel-heading compact">
+                  <h3>Logs{selectedRunId ? " (historical)" : " (live)"}</h3>
+                  <span>{logs.length}</span>
+                </div>
+                <div className="log-list" ref={logListRef}>
+                  {logs.map((log) => (
+                    <code className={`log-line log-${log.stream}`} key={log.id}>
+                      {log.content}
+                    </code>
+                  ))}
+                  {logs.length === 0 ? <p className="empty-state">No run logs yet.</p> : null}
+                </div>
+              </section>
+            </>
+          )}
+
+          {workspaceTab === "workflow" && activeProjectId && (
+            <div className="workflow-tab-content">
+              <WorkflowList
+                workflows={workflows}
+                activeWorkflowId={activeWorkflowId}
+                onSelect={handleSelectWorkflow}
+                onCreate={handleCreateWorkflow}
+                onDelete={handleDeleteWorkflow}
+                onRun={handleRunWorkflow}
+                isRunning={isRunningWorkflow}
+              />
+              {workflowGraph ? (
+                <>
+                  <WorkflowCanvas
+                    nodes={workflowGraph.graph.nodes.map((n) => ({
+                      id: n.id,
+                      type: n.type,
+                      position: n.position,
+                      data: n.data
+                    }))}
+                    edges={workflowGraph.graph.edges.map((e) => ({
+                      id: e.id,
+                      source: e.source,
+                      target: e.target
+                    }))}
+                    onGraphChange={handleGraphChange}
+                  />
+                  {workflowRun ? (
+                    <div className="workflow-run-status">
+                      <span className={`status-dot status-${workflowRun.status}`} />
+                      <span>Workflow: {workflowRun.status}</span>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="empty-state">Select or create a workflow to begin.</p>
+              )}
             </div>
-            <div className="log-list" ref={logListRef}>
-              {logs.map((log) => (
-                <code className={`log-line log-${log.stream}`} key={log.id}>
-                  {log.content}
-                </code>
-              ))}
-              {logs.length === 0 ? <p className="empty-state">No run logs yet.</p> : null}
-            </div>
-          </section>
+          )}
+
+          {workspaceTab === "workflow" && !activeProjectId && (
+            <p className="empty-state">Select a project first.</p>
+          )}
+
+          {workspaceTab === "preview" && (
+            <>
+              {preview.status === "running" ? (
+                <button className="show-preview-btn" onClick={() => setShowIframe((v) => !v)} type="button">
+                  {showIframe ? "Hide Preview" : "Show Preview"}
+                </button>
+              ) : null}
+              {showIframe && preview.url ? (
+                <iframe className="preview-iframe" src={preview.url} title="Preview" />
+              ) : null}
+              {preview.status !== "running" ? (
+                <p className="empty-state">Preview is not running. Click Start Preview to begin.</p>
+              ) : null}
+            </>
+          )}
         </section>
       </section>
     </main>

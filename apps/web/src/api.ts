@@ -5,7 +5,11 @@ import type {
   FileNode,
   PreviewInfo,
   ProjectSummary,
-  TemplateMeta
+  TemplateMeta,
+  WorkflowDetail,
+  WorkflowGraph,
+  WorkflowRun,
+  WorkflowSummary
 } from "@ai-app-generator/shared";
 
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:4317";
@@ -90,6 +94,50 @@ export async function deleteProject(projectId: string): Promise<void> {
   await request<{ ok: boolean }>(
     `/api/projects/${encodeURIComponent(projectId)}`,
     { method: "DELETE" }
+  );
+}
+
+export async function listWorkflows(projectId: string): Promise<WorkflowSummary[]> {
+  return request<WorkflowSummary[]>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows`
+  );
+}
+
+export async function createWorkflow(projectId: string, name: string): Promise<WorkflowDetail> {
+  return request<WorkflowDetail>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows`,
+    { method: "POST", body: JSON.stringify({ name }) }
+  );
+}
+
+export async function getWorkflow(projectId: string, workflowId: string): Promise<WorkflowDetail> {
+  return request<WorkflowDetail>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}`
+  );
+}
+
+export async function updateWorkflowGraph(
+  projectId: string,
+  workflowId: string,
+  graph: WorkflowGraph
+): Promise<WorkflowDetail> {
+  return request<WorkflowDetail>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}`,
+    { method: "PUT", body: JSON.stringify({ graph }) }
+  );
+}
+
+export async function deleteWorkflow(projectId: string, workflowId: string): Promise<void> {
+  await request<{ ok: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function runWorkflow(projectId: string, workflowId: string): Promise<WorkflowRun> {
+  return request<WorkflowRun>(
+    `/api/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/run`,
+    { method: "POST" }
   );
 }
 

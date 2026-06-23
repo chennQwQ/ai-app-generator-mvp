@@ -74,6 +74,25 @@ export function migrate(db: Database.Database) {
       output text,
       created_at text not null
     );
+
+    create table if not exists workflows (
+      id text primary key,
+      project_id text not null references projects(id) on delete cascade,
+      name text not null,
+      graph text not null,
+      created_at text not null,
+      updated_at text not null
+    );
+
+    create table if not exists workflow_runs (
+      id text primary key,
+      workflow_id text not null references workflows(id) on delete cascade,
+      project_id text not null references projects(id) on delete cascade,
+      status text not null,
+      started_at text,
+      finished_at text,
+      created_at text not null
+    );
   `);
 
   migrateMessagesAgentRunForeignKey(db);
@@ -86,6 +105,9 @@ export function migrate(db: Database.Database) {
     create index if not exists idx_agent_logs_run_sequence on agent_logs(agent_run_id, sequence);
     create index if not exists idx_audit_logs_project_id on audit_logs(project_id);
     create index if not exists idx_audit_logs_run_id on audit_logs(run_id);
+    create index if not exists idx_workflows_project_id on workflows(project_id);
+    create index if not exists idx_workflow_runs_workflow_id on workflow_runs(workflow_id);
+    create index if not exists idx_workflow_runs_project_id on workflow_runs(project_id);
   `);
 }
 

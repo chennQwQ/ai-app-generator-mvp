@@ -548,6 +548,174 @@ a {
   }
 }
 
+.workspace-tabs {
+  border-bottom: 1px solid var(--border-color, #d7dde4);
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.workspace-tabs .tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-secondary, #66717d);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+}
+
+.workspace-tabs .tab:hover {
+  color: var(--text-primary, #1d232a);
+}
+
+.workspace-tabs .tab.active {
+  border-bottom-color: var(--primary, #1f6feb);
+  color: var(--primary, #1f6feb);
+}
+
+.workflow-tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 8px;
+  min-height: 0;
+}
+
+.workflow-list-panel {
+  border-bottom: 1px solid var(--border-color, #d7dde4);
+  padding-bottom: 8px;
+}
+
+.workflow-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.workflow-item {
+  align-items: center;
+  background: var(--bg-secondary, #f6f8fb);
+  border: 1px solid var(--border-color, #d7dde4);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  padding: 6px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.workflow-item:hover {
+  border-color: var(--primary, #1f6feb);
+}
+
+.workflow-item.active {
+  border-color: var(--primary, #1f6feb);
+  background: #e8f0fe;
+}
+
+.workflow-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.workflow-nodes {
+  color: var(--text-secondary, #66717d);
+  font-size: 11px;
+}
+
+.workflow-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.run-workflow-btn {
+  background: var(--primary, #1f6feb);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.run-workflow-btn:disabled {
+  opacity: 0.5;
+}
+
+.delete-workflow-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #66717d);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.delete-workflow-btn:hover {
+  color: var(--danger, #cf222e);
+}
+
+.workflow-canvas {
+  border: 1px solid var(--border-color, #d7dde4);
+  border-radius: 6px;
+  flex: 1;
+  min-height: 300px;
+}
+
+.workflow-node {
+  background: #fff;
+  border: 1px solid var(--border-color, #d7dde4);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+  min-width: 140px;
+  padding: 0;
+}
+
+.workflow-node-header {
+  border-bottom: 1px solid var(--border-color, #d7dde4);
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+}
+
+.user-input-node .workflow-node-header {
+  background: #e8f0fe;
+  color: #1f6feb;
+}
+
+.agent-generation-node .workflow-node-header {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
+.shell-command-node .workflow-node-header {
+  background: #fef3cd;
+  color: #8a6d10;
+}
+
+.workflow-node-body {
+  color: var(--text-primary, #1d232a);
+  font-size: 11px;
+  padding: 8px 10px;
+}
+
+.workflow-run-status {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 4px 0;
+}
+
 @media (max-width: 760px) {
   .studio-shell {
     padding: 12px;

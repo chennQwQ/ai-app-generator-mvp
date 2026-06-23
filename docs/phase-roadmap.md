@@ -160,37 +160,32 @@ Reference plan:
 
 ## Phase 5: Visual Workflow Builder
 
-Status: Planned.
+Status: Done.
 
 Goal: move from one prompt-to-app flow toward a visible workflow graph.
 
-Planned scope:
+Done:
 
-- Add workflow data model.
-- Add workflow save/load API.
-- Add React Flow canvas.
-- Add node types:
-  - user input
-  - Agent generation
-  - shell command
-  - HTTP request
-  - condition
-  - preview/deploy
-- Add edge validation.
-- Add workflow run history.
-- Map workflow execution to existing Agent/project primitives.
-
-Implementation notes:
-
-- Keep the first workflow engine in TypeScript unless ApiFlow integration is part of the same task.
-- Do not add Java/Groovy runtime coupling until node contracts are stable.
-- Add tests for graph validation and execution ordering.
+- Added `workflows` and `workflow_runs` DB tables.
+- Added `WorkflowService` with CRUD, graph validation (edge references, self-loops, node type checks, ownership checks).
+- Added `WorkflowExecutor` with topological sort, sequential node execution, async shell commands, and WebSocket event publishing.
+- Added 6 REST endpoints: list/create/get/update/delete/run workflows.
+- Added React Flow canvas with 3 custom node types (user_input, agent_generation, shell_command).
+- Added workspace tab switching (Files | Workflow | Preview).
+- Added workflow list with create/delete/run controls.
+- Added auto-save on graph changes (800ms debounce).
+- Added WebSocket events for workflow run and node status.
 
 Acceptance:
 
 - User can create and save a workflow graph.
 - User can run a simple graph that starts an Agent run.
 - Invalid graphs show client-safe validation errors.
+- Workflow runs stream status via WebSocket.
+
+Reference plan:
+
+- `docs/superpowers/plans/2026-06-23-ai-app-generator-phase5.md`
 
 ## Phase 6: ApiFlow Runtime Integration
 

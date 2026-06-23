@@ -7,6 +7,17 @@ vi.mock("@monaco-editor/react", () => ({
   default: ({ value }: { value: string }) => <pre data-testid="monaco-editor">{value}</pre>
 }));
 
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: ({ children }: { children?: React.ReactNode }) => <div data-testid="react-flow">{children}</div>,
+  Controls: () => <div data-testid="react-flow-controls" />,
+  Background: () => <div data-testid="react-flow-background" />,
+  Handle: () => <div data-testid="react-flow-handle" />,
+  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
+  useNodesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
+  useEdgesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
+  addEdge: (params: unknown, edges: unknown[]) => [...edges, params]
+}));
+
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
 
@@ -103,6 +114,21 @@ describe("App", () => {
         }
 
         if (url.endsWith("/api/projects/project-2/runs")) {
+          return jsonResponse([]);
+        }
+
+        if (url.includes("/workflows")) {
+          if (_init?.method === "POST") {
+            return jsonResponse({
+              id: "workflow-1",
+              projectId: "project-1",
+              name: "New Workflow",
+              nodeCount: 0,
+              graph: { nodes: [], edges: [] },
+              createdAt: "2026-06-23T00:00:00.000Z",
+              updatedAt: "2026-06-23T00:00:00.000Z"
+            }, 201);
+          }
           return jsonResponse([]);
         }
 

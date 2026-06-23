@@ -12,6 +12,8 @@ import { FileService } from "./files/file-service.js";
 import { PreviewManager } from "./preview/preview-manager.js";
 import { ProjectService } from "./projects/project-service.js";
 import { TemplateService } from "./templates/template-service.js";
+import { WorkflowService } from "./workflows/workflow-service.js";
+import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerMessageRoutes } from "./routes/messages.js";
@@ -20,6 +22,7 @@ import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRunRoutes } from "./routes/runs.js";
 import { registerTemplateRoutes } from "./routes/templates.js";
 import { registerWebSocketRoutes } from "./routes/ws.js";
+import { registerWorkflowRoutes } from "./routes/workflows.js";
 
 export async function createServer(config: AppConfig) {
   const app = Fastify({ logger: true });
@@ -50,6 +53,7 @@ export async function createServer(config: AppConfig) {
   });
   await registerProjectRoutes(app, projects);
   await registerTemplateRoutes(app, templates);
+  await registerWorkflowRoutes(app, new WorkflowService(db), new WorkflowExecutor(db, bus, runner, audit, projects));
   await registerAuditRoutes(app, audit);
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);

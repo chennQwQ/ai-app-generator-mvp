@@ -193,6 +193,11 @@ Status: Planned.
 
 Goal: connect the visual workflow model to the ApiFlow execution backend.
 
+Pre-development assessment:
+
+- ApiFlow can support a limited vertical slice as an execution kernel, but it does not yet provide the runtime control plane, structured execution events, external run IDs, or full Studio node coverage needed for the complete Phase 6 scope.
+- Detailed assessment and recommended work breakdown: `docs/phase6-apiflow-integration-assessment.md`
+
 Planned scope:
 
 - Define workflow export format.

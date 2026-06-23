@@ -14,7 +14,8 @@ export interface AppConfig {
   opencodeRunFormat: "json";
   previewHost: string;
   previewPortStart: number;
-  workflowRuntime: "local" | "apiflow";
+  workflowRuntime: "local" | "apiflow" | "apiflow-http";
+  apiFlowSidecarUrl: string;
 }
 
 export interface LoadConfigOptions {
@@ -49,6 +50,9 @@ export function loadConfig(
     opencodeRunFormat: "json",
     previewHost: env.PREVIEW_HOST ?? "127.0.0.1",
     previewPortStart: Number(env.PREVIEW_PORT_START ?? 6200),
-    workflowRuntime: env.WORKFLOW_RUNTIME === "apiflow" ? "apiflow" : "local"
+    workflowRuntime: env.WORKFLOW_RUNTIME === "apiflow" ? "apiflow"
+      : env.WORKFLOW_RUNTIME === "apiflow-http" ? "apiflow-http"
+      : "local",
+    apiFlowSidecarUrl: env.APIFLOW_SIDECAR_URL ?? "http://127.0.0.1:9527"
   };
 }

@@ -73,7 +73,7 @@ describe("shared domain helpers", () => {
   });
 
   it("lists workflow node types", () => {
-    expect(workflowNodeTypes).toEqual(["user_input", "agent_generation", "shell_command"]);
+    expect(workflowNodeTypes).toEqual(["user_input", "agent_generation", "shell_command", "http_request"]);
   });
 
   it("lists workflow websocket event types", () => {
@@ -84,6 +84,6 @@ describe("shared domain helpers", () => {
   });
 
   it("lists apiFlow v1 compatible node types", () => {
-    expect(apiFlowCompatibleNodeTypes).toEqual(["user_input"]);
+    expect(apiFlowCompatibleNodeTypes).toEqual(["user_input", "http_request"]);
   });
 });

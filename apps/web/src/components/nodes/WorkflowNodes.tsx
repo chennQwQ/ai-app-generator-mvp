@@ -31,3 +31,14 @@ export function ShellCommandNode({ data }: NodeProps) {
     </div>
   );
 }
+
+export function HttpRequestNode({ data }: NodeProps) {
+  return (
+    <div className="workflow-node http-request-node">
+      <Handle type="target" position={Position.Top} />
+      <div className="workflow-node-header">HTTP Request</div>
+      <div className="workflow-node-body">{String(data.url ?? "")}</div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}

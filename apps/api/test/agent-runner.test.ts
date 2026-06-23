@@ -228,6 +228,7 @@ function fakeConfig(root: string): AppConfig {
     opencodeRunFormat: "json",
     previewHost: "127.0.0.1",
     previewPortStart: 6200,
-    workflowRuntime: "local"
+    workflowRuntime: "local",
+    apiFlowSidecarUrl: "http://127.0.0.1:9527"
   };
 }

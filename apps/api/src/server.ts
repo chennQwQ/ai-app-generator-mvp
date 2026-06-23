@@ -15,6 +15,7 @@ import { TemplateService } from "./templates/template-service.js";
 import { WorkflowService } from "./workflows/workflow-service.js";
 import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { FakeApiFlowRuntimeAdapter } from "./apiflow/apiflow-adapter.js";
+import { HttpApiFlowRuntimeAdapter } from "./apiflow/apiflow-http-adapter.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerMessageRoutes } from "./routes/messages.js";
@@ -41,7 +42,9 @@ export async function createServer(config: AppConfig) {
   });
   const apiFlowAdapter = config.workflowRuntime === "apiflow"
     ? new FakeApiFlowRuntimeAdapter(bus)
-    : undefined;
+    : config.workflowRuntime === "apiflow-http"
+      ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl }, bus)
+      : undefined;
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);

@@ -702,6 +702,11 @@ a {
   color: #8a6d10;
 }
 
+.http-request-node .workflow-node-header {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .workflow-node-body {
   color: var(--text-primary, #1d232a);
   font-size: 11px;

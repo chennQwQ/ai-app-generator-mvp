@@ -154,7 +154,7 @@ export interface AuditLog {
   createdAt: string;
 }
 
-export const workflowNodeTypes = ["user_input", "agent_generation", "shell_command"] as const;
+export const workflowNodeTypes = ["user_input", "agent_generation", "shell_command", "http_request"] as const;
 
 export type WorkflowNodeType = (typeof workflowNodeTypes)[number];
 
@@ -214,7 +214,7 @@ export const workflowEventTypes = [
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];
 
-export const apiFlowCompatibleNodeTypes = ["user_input"] as const;
+export const apiFlowCompatibleNodeTypes = ["user_input", "http_request"] as const;
 
 export type ApiFlowCompatibleNodeType = (typeof apiFlowCompatibleNodeTypes)[number];
 

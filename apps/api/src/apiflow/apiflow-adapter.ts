@@ -1,6 +1,6 @@
-import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput, WorkflowGraph } from "@ai-app-generator/shared";
-import { apiFlowCompatibleNodeTypes } from "@ai-app-generator/shared";
+import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
 import type { EventBus } from "../events/event-bus.js";
+import { DslCompiler } from "./dsl-compiler.js";
 
 export interface ApiFlowRuntimeAdapter {
   exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult>;
@@ -12,56 +12,30 @@ export interface ApiFlowRuntimeAdapter {
 
 export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   private readonly runs = new Map<string, ApiFlowExternalRun>();
+  private readonly compiler = new DslCompiler();
 
   constructor(private readonly bus: EventBus) {}
 
   async exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult> {
-    const unsupportedNodes = input.graph.nodes
-      .filter((n) => !(apiFlowCompatibleNodeTypes as readonly string[]).includes(n.type))
-      .map((n) => n.id);
-
-    const lines: string[] = [];
-    lines.push("init {");
-    lines.push('    listen webhook on "/execute"');
-    lines.push("}");
-    lines.push("");
-
-    for (const node of input.graph.nodes) {
-      if (node.type === "user_input") {
-        lines.push(`t_${sanitizeId(node.id)} = EVAL {`);
-        lines.push('    log.info("User input: ${input.prompt}")');
-        lines.push(`    "${String(node.data.prompt ?? "")}"`);
-        lines.push("}");
-        lines.push("");
-      }
+    const validation = this.compiler.validateForExport(input.graph);
+    if (!validation.valid) {
+      throw new Error(validation.errors.join("; "));
     }
-
-    lines.push("start {");
-    const sorted = topologicalSort(input.graph);
-    if (sorted) {
-      for (const nodeId of sorted) {
-        const node = input.graph.nodes.find((n) => n.id === nodeId);
-        if (node && (apiFlowCompatibleNodeTypes as readonly string[]).includes(node.type)) {
-          lines.push(`    run t_${sanitizeId(nodeId)}`);
-        }
-      }
-    }
-    lines.push("}");
-
     return {
       version: 1,
       projectId: input.projectId,
       workflowId: input.workflowId,
-      dsl: lines.join("\n"),
+      dsl: this.compiler.compile(input.graph),
       entryNodeIds: input.graph.nodes
         .filter((n) => !input.graph.edges.some((e) => e.target === n.id))
         .map((n) => n.id),
-      unsupportedNodes
+      unsupportedNodes: []
     };
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
     const externalRunId = `apiflow-fake-${input.workflowId}-${Date.now()}`;
+    const now = new Date().toISOString();
     const run: ApiFlowExternalRun = {
       externalRunId,
       workflowId: input.workflowId,
@@ -70,11 +44,24 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
       error: null,
       startedAt: null,
       finishedAt: null,
-      createdAt: new Date().toISOString()
+      createdAt: now
     };
     this.runs.set(externalRunId, run);
 
-    // Simulate async execution
+    this.bus.publish({
+      type: "workflow.run.status",
+      projectId: input.projectId,
+      run: {
+        id: externalRunId,
+        workflowId: input.workflowId,
+        projectId: input.projectId,
+        status: "queued",
+        startedAt: null,
+        finishedAt: null,
+        createdAt: now
+      }
+    });
+
     setTimeout(() => {
       run.status = "running";
       run.startedAt = new Date().toISOString();
@@ -88,7 +75,7 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
           status: "running",
           startedAt: run.startedAt,
           finishedAt: null,
-          createdAt: new Date().toISOString()
+          createdAt: run.createdAt
         }
       });
 
@@ -133,43 +120,4 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   async healthCheck(): Promise<{ ok: boolean; reason?: string }> {
     return { ok: true };
   }
-}
-
-function sanitizeId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_]/g, "_");
-}
-
-function topologicalSort(graph: WorkflowGraph): string[] | null {
-  const inDegree = new Map<string, number>();
-  const adjacency = new Map<string, string[]>();
-
-  for (const node of graph.nodes) {
-    inDegree.set(node.id, 0);
-    adjacency.set(node.id, []);
-  }
-
-  for (const edge of graph.edges) {
-    if (!inDegree.has(edge.source) || !inDegree.has(edge.target)) continue;
-    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
-    adjacency.get(edge.source)?.push(edge.target);
-  }
-
-  const queue: string[] = [];
-  for (const [nodeId, degree] of inDegree) {
-    if (degree === 0) queue.push(nodeId);
-  }
-
-  const result: string[] = [];
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    result.push(nodeId);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
-      inDegree.set(neighbor, newDegree);
-      if (newDegree === 0) queue.push(neighbor);
-    }
-  }
-
-  if (result.length !== graph.nodes.length) return null;
-  return result;
 }

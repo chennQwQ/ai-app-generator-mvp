@@ -13,12 +13,13 @@ import {
   useEdgesState
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { UserInputNode, AgentGenerationNode, ShellCommandNode } from "./nodes/WorkflowNodes";
+import { UserInputNode, AgentGenerationNode, ShellCommandNode, HttpRequestNode } from "./nodes/WorkflowNodes";
 
 const nodeTypes = {
   user_input: UserInputNode,
   agent_generation: AgentGenerationNode,
-  shell_command: ShellCommandNode
+  shell_command: ShellCommandNode,
+  http_request: HttpRequestNode
 };
 
 interface WorkflowCanvasProps {

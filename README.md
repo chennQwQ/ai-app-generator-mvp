@@ -42,7 +42,7 @@ sequenceDiagram
 Git must be initialized and used from this directory:
 
 ```powershell
-cd D:\doc\code\apiFlow项目课程\ai-app-generator-mvp
+cd <project-root>
 git status
 ```
 
@@ -57,6 +57,7 @@ See [docs/local-development.md](docs/local-development.md) for the local workflo
 ## Developer Documentation
 
 - [Product requirements](docs/product-requirements.md)
+- [ApiFlow project routing design](docs/superpowers/specs/2026-06-24-apiflow-project-routing-design.md)
 - [Implementation guide](docs/implementation-guide.md)
 - [Development standards](docs/development-standards.md)
 - [Phase roadmap and status](docs/phase-roadmap.md)

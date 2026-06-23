@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { AgentLogStream, AgentRun } from "@ai-app-generator/shared";
+import { isTerminalRunStatus, type AgentLogStream, type AgentRun } from "@ai-app-generator/shared";
 import { ProjectNotFoundError, type ProjectService } from "../projects/project-service.js";
 import {
   ActiveAgentRunError,
@@ -15,6 +15,11 @@ export async function registerMessageRoutes(
   runner: AgentRunner,
   bus: EventBus
 ) {
+  let closed = false;
+  app.addHook("onClose", async () => {
+    closed = true;
+  });
+
   app.get("/api/projects/:projectId/messages", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
 
@@ -73,7 +78,8 @@ export async function registerMessageRoutes(
       run: created.run,
       conversations,
       runner,
-      bus
+      bus,
+      isClosed: () => closed
     });
 
     return reply.code(202).send(created);
@@ -89,6 +95,7 @@ function startRun(options: {
   conversations: ConversationService;
   runner: AgentRunner;
   bus: EventBus;
+  isClosed: () => boolean;
 }): void {
   void (async () => {
     try {
@@ -99,6 +106,7 @@ function startRun(options: {
         prompt: options.prompt,
         onLog: (stream, content) => recordAndPublishLog(options, stream, content)
       });
+      if (options.isClosed() || isRunAlreadyTerminal(options)) return;
       const status = result.exitCode === 0 ? "succeeded" : "failed";
       const completedRun = safeUpdateAgentRunStatus(options, status, result);
       if (completedRun) {
@@ -108,6 +116,7 @@ function startRun(options: {
         safePublish(options, { type: "files.changed", projectId: options.projectId });
       }
     } catch (error) {
+      if (options.isClosed() || isRunAlreadyTerminal(options)) return;
       safeLogError(options, error, "Agent run failed");
       const failedRun = safeUpdateAgentRunStatus(options, "failed", {
         exitCode: 1,
@@ -129,6 +138,7 @@ function recordAndPublishLog(
   stream: AgentLogStream,
   content: string
 ): void {
+  if (options.isClosed()) return;
   try {
     const log = options.conversations.recordAgentLog(options.run.id, stream, content);
     safePublish(options, { type: "run.log", projectId: options.projectId, log });
@@ -137,11 +147,21 @@ function recordAndPublishLog(
   }
 }
 
+function isRunAlreadyTerminal(options: StartRunOptions): boolean {
+  try {
+    return isTerminalRunStatus(options.conversations.getAgentRun(options.run.id).status);
+  } catch (error) {
+    safeLogError(options, error, "Agent run lookup failed");
+    return true;
+  }
+}
+
 function safeUpdateAgentRunStatus(
   options: StartRunOptions,
   status: AgentRun["status"],
   fields: { exitCode?: number | null; errorMessage?: string | null } = {}
 ): AgentRun | null {
+  if (options.isClosed()) return null;
   try {
     return options.conversations.updateAgentRunStatus(options.run.id, status, fields);
   } catch (error) {
@@ -151,6 +171,7 @@ function safeUpdateAgentRunStatus(
 }
 
 function safePublish(options: StartRunOptions, event: Parameters<EventBus["publish"]>[0]): void {
+  if (options.isClosed()) return;
   try {
     options.bus.publish(event);
   } catch (error) {
@@ -159,6 +180,7 @@ function safePublish(options: StartRunOptions, event: Parameters<EventBus["publi
 }
 
 function safeLogError(options: StartRunOptions, error: unknown, message: string): void {
+  if (options.isClosed()) return;
   try {
     options.app.log.error({ err: error }, message);
   } catch {

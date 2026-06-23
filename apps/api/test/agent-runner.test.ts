@@ -221,7 +221,6 @@ function fakeConfig(root: string): AppConfig {
     webOrigin: "http://127.0.0.1:5173",
     storageDir: path.join(root, "storage"),
     workspaceDir: path.join(root, "workspaces"),
-    templateDir: path.join(root, "template"),
     templatesDir: path.join(root, "templates"),
     agentProvider: "fake",
     opencodeCommand: "opencode",

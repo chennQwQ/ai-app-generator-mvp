@@ -407,7 +407,6 @@ function testConfig(root: string, env: NodeJS.ProcessEnv = {}): AppConfig {
     APP_ROOT: path.resolve(process.cwd()),
     STORAGE_DIR: path.join(root, "storage"),
     WORKSPACE_DIR: path.join(root, "workspaces"),
-    TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
     AGENT_PROVIDER: "fake",
     ...env
   });

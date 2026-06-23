@@ -25,7 +25,7 @@ class MockWebSocket {
 }
 
 describe("App", () => {
-  let responseOverrides: Map<string, (url: string) => Promise<Response> | Response>;
+  let responseOverrides: Map<string, (url: string, init?: RequestInit) => Promise<Response> | Response>;
 
   beforeEach(() => {
     MockWebSocket.instances = [];
@@ -38,7 +38,22 @@ describe("App", () => {
         const pathname = new URL(url).pathname;
 
         const override = responseOverrides.get(pathname);
-        if (override) return override(url);
+        if (override) return override(url, _init);
+
+        if (url.endsWith("/api/templates")) {
+          return jsonResponse([
+            {
+              id: "react-vite",
+              name: "React (Vite + TypeScript)",
+              description: "React 19 app with Vite"
+            },
+            {
+              id: "vue-vite",
+              name: "Vue (Vite + TypeScript)",
+              description: "Vue 3 app with Vite"
+            }
+          ]);
+        }
 
         if (url.endsWith("/api/projects")) {
           return jsonResponse([
@@ -115,6 +130,56 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: /start preview/i })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/No files yet/i)).toBeInTheDocument();
+  });
+
+  it("loads templates and sends the selected template when creating a project", async () => {
+    let createPayload: unknown;
+    responseOverrides.set("/api/projects", (_url, init) => {
+      if (init?.method === "POST") {
+        createPayload = JSON.parse(String(init.body));
+        return jsonResponse({
+          id: "project-3",
+          name: "Vue App",
+          slug: "vue-app",
+          status: "ready",
+          previewStatus: "stopped",
+          previewPort: null,
+          previewUrl: null,
+          createdAt: "2026-06-22T00:00:00.000Z",
+          updatedAt: "2026-06-22T00:00:00.000Z"
+        });
+      }
+
+      return jsonResponse([
+        {
+          id: "project-1",
+          name: "Demo Project",
+          slug: "demo-project",
+          status: "ready",
+          previewStatus: "stopped",
+          previewPort: null,
+          previewUrl: null,
+          createdAt: "2026-06-22T00:00:00.000Z",
+          updatedAt: "2026-06-22T00:00:00.000Z"
+        }
+      ]);
+    });
+    responseOverrides.set("/api/projects/project-3/messages", () => jsonResponse([]));
+    responseOverrides.set("/api/projects/project-3/files", () => jsonResponse([]));
+    responseOverrides.set("/api/projects/project-3/runs", () => jsonResponse([]));
+
+    render(<App />);
+
+    const templateSelect = await screen.findByRole("combobox", { name: /template/i });
+    expect(within(templateSelect).getByRole("option", { name: /react/i })).toBeInTheDocument();
+    expect(within(templateSelect).getByRole("option", { name: /vue/i })).toBeInTheDocument();
+
+    fireEvent.change(templateSelect, { target: { value: "vue-vite" } });
+    fireEvent.change(screen.getByLabelText(/project name/i), { target: { value: "Vue App" } });
+    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Vue App" })).toBeInTheDocument();
+    expect(createPayload).toEqual({ name: "Vue App", template: "vue-vite" });
   });
 
   it("does not show stale file content after switching projects during a file request", async () => {

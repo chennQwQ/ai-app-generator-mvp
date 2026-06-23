@@ -17,7 +17,6 @@ describe("loadConfig", () => {
     expect(config.appRoot).toBe(repoRoot);
     expect(config.storageDir).toBe(path.join(repoRoot, "storage"));
     expect(config.workspaceDir).toBe(path.join(repoRoot, "workspaces"));
-    expect(config.templateDir).toBe(path.join(repoRoot, "templates/react-vite"));
     expect(config.templatesDir).toBe(path.join(repoRoot, "templates"));
   });
 
@@ -28,7 +27,15 @@ describe("loadConfig", () => {
     expect(config.appRoot).toBe(appRoot);
     expect(config.storageDir).toBe(path.join(appRoot, "storage"));
     expect(config.workspaceDir).toBe(path.join(appRoot, "workspaces"));
-    expect(config.templateDir).toBe(path.join(appRoot, "templates/react-vite"));
     expect(config.templatesDir).toBe(path.join(appRoot, "templates"));
+  });
+
+  it("uses TEMPLATES_DIR when supplied", () => {
+    const repoRoot = path.resolve("D:/work/ai-app-generator-mvp");
+    const config = loadConfig(
+      { TEMPLATES_DIR: "./custom-templates" },
+      { cwd: repoRoot }
+    );
+    expect(config.templatesDir).toBe(path.join(repoRoot, "custom-templates"));
   });
 });

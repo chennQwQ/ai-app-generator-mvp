@@ -27,8 +27,12 @@ describe("vue vite template", () => {
     const root = path.resolve(process.cwd(), "templates/vue-vite");
     expect(existsSync(path.join(root, "package.json"))).toBe(true);
     expect(existsSync(path.join(root, "index.html"))).toBe(true);
+    expect(existsSync(path.join(root, "vite.config.ts"))).toBe(true);
+    expect(existsSync(path.join(root, "tsconfig.json"))).toBe(true);
+    expect(existsSync(path.join(root, "env.d.ts"))).toBe(true);
     expect(existsSync(path.join(root, "src/App.vue"))).toBe(true);
     expect(existsSync(path.join(root, "src/main.ts"))).toBe(true);
+    expect(existsSync(path.join(root, "src/styles.css"))).toBe(true);
   });
 });
 

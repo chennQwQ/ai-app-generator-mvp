@@ -17,8 +17,7 @@ describe("run routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-runs-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -56,8 +55,7 @@ describe("run routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-runs-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -75,8 +73,7 @@ describe("run routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-runs-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -115,8 +112,7 @@ describe("run routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-runs-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 

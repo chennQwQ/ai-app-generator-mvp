@@ -135,6 +135,33 @@ Use `getToolDefinition(name)` to retrieve a tool by name.
 
 Every agent run records tool calls in the `audit_logs` table. The audit log includes the tool name, parameters, exit code, and optional output. Audit records are served at `GET /api/projects/:id/audit`.
 
+### Phase 4 Verification Commands
+
+Run the full automated checks from the project repository root:
+
+```powershell
+npm test
+npm run typecheck
+npm run build
+```
+
+If Windows PowerShell blocks `npm.ps1`, use the `.cmd` shim:
+
+```powershell
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+### Phase 4 Manual Acceptance Checklist
+
+- Verify `GET /api/templates` returns both `react-vite` and `vue-vite`.
+- Create a project with `template: "vue-vite"` and confirm its workspace contains `src/App.vue`.
+- Create a project with `template: "react-vite"` and confirm its workspace contains `src/App.tsx`.
+- Open the web UI and confirm the template dropdown shows React and Vue options.
+- Run the fake agent and confirm `GET /api/projects/:id/audit` returns a `file_write` tool call.
+- Confirm the `audit_logs` table exists after schema initialization.
+
 ## Repository Boundary
 
 The parent course directory contains videos, PDFs, archives, extracted frames, and reference materials. Those parent course files, videos, and docs are outside this Git repository and must not be committed.

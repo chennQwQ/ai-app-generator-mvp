@@ -33,4 +33,34 @@ describe("shared domain helpers", () => {
     expect(shell.parameters.length).toBeGreaterThan(0);
     expect(getToolDefinition("nonexistent")).toBeUndefined();
   });
+
+  it("defines required schema fields for tool parameters", () => {
+    for (const tool of toolDefinitions) {
+      expect(tool.description).toEqual(expect.any(String));
+      expect(tool.description.length).toBeGreaterThan(0);
+      expect(tool.parameters.length).toBeGreaterThan(0);
+      for (const parameter of tool.parameters) {
+        expect(parameter.name).toEqual(expect.any(String));
+        expect(parameter.type).toMatch(/^(string|number|boolean)$/);
+        expect(parameter.description).toEqual(expect.any(String));
+        expect(parameter.description.length).toBeGreaterThan(0);
+      }
+    }
+
+    expect(getToolDefinition("shell")?.parameters).toContainEqual(
+      expect.objectContaining({ name: "command", type: "string", required: true })
+    );
+    expect(getToolDefinition("file_write")?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "path", type: "string", required: true }),
+        expect.objectContaining({ name: "content", type: "string", required: true })
+      ])
+    );
+    expect(getToolDefinition("npm_install")?.parameters).toContainEqual(
+      expect.objectContaining({ name: "dev", type: "boolean", default: false })
+    );
+    expect(getToolDefinition("npm_build")?.parameters).toContainEqual(
+      expect.objectContaining({ name: "script", type: "string", default: "build" })
+    );
+  });
 });

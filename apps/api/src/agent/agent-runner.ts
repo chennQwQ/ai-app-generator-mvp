@@ -47,17 +47,19 @@ export class FakeAgentRunner implements AgentRunner {
 
     const srcDir = path.join(request.workspacePath, "src");
     mkdirSync(srcDir, { recursive: true });
-    writeFileSync(path.join(srcDir, "App.tsx"), renderFakeApp(request.prompt), "utf8");
+    const target = resolveFakeAppTarget(request.workspacePath);
+    const content = target.kind === "vue" ? renderFakeVueApp(request.prompt) : renderFakeReactApp(request.prompt);
+    writeFileSync(path.join(request.workspacePath, target.path), content, "utf8");
 
     this.audit?.recordLog({
       projectId: request.projectId,
       runId: request.runId,
       toolName: "file_write",
-      parameters: { path: "src/App.tsx" },
+      parameters: { path: target.path, content },
       exitCode: 0
     });
 
-    emitLog(request, "event", "Fake agent wrote src/App.tsx");
+    emitLog(request, "event", `Fake agent wrote ${target.path}`);
 
     if (controller.signal.aborted) {
       this.controllers.delete(request.runId);
@@ -184,7 +186,13 @@ export function createAgentRunner(config: AppConfig, bus: EventBus, audit?: Audi
     : new FakeAgentRunner(config, bus, audit);
 }
 
-function renderFakeApp(prompt: string): string {
+function resolveFakeAppTarget(workspacePath: string): { path: string; kind: "react" | "vue" } {
+  return existsSync(path.join(workspacePath, "src", "App.vue"))
+    ? { path: "src/App.vue", kind: "vue" }
+    : { path: "src/App.tsx", kind: "react" };
+}
+
+function renderFakeReactApp(prompt: string): string {
   return `const prompt = ${tsxStringLiteral(prompt)};
 
 export default function App() {
@@ -195,6 +203,20 @@ export default function App() {
     </main>
   );
 }
+`;
+}
+
+function renderFakeVueApp(prompt: string): string {
+  return `<script setup lang="ts">
+const prompt = ${tsxStringLiteral(prompt)};
+</script>
+
+<template>
+  <main>
+    <h1>Generated App</h1>
+    <p>{{ prompt }}</p>
+  </main>
+</template>
 `;
 }
 

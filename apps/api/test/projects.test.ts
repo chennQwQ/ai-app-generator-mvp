@@ -24,8 +24,7 @@ describe("project routes", () => {
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -40,6 +39,8 @@ describe("project routes", () => {
     expect(project.name).toBe("Todo App");
     expect(project.status).toBe("created");
     expect(existsSync(path.join(config.workspaceDir, project.id, "package.json"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
 
     const list = await app.inject({ method: "GET", url: "/api/projects" });
     expect(list.json()).toHaveLength(1);
@@ -52,8 +53,7 @@ describe("project routes", () => {
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
     db.exec(`
@@ -76,11 +76,11 @@ describe("project routes", () => {
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const db = openDatabase(path.join(config.storageDir, "app.sqlite"));
-    const projects = new ProjectService(db, config, new TemplateService(config.templatesDir));    const project = projects.createProject("Preview Reset App");
+    const projects = new ProjectService(db, config, new TemplateService(config.templatesDir));
+    const project = projects.createProject("Preview Reset App");
 
     projects.updatePreview(project.id, {
       status: "running",
@@ -104,7 +104,6 @@ describe("project routes", () => {
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
       WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
       TEMPLATES_DIR: templatesDir
     });
     const app = await createServer(config);
@@ -130,8 +129,7 @@ describe("project routes", () => {
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -151,8 +149,7 @@ describe("project routes", () => {
     const config = loadConfig({
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -222,8 +219,7 @@ describe("project routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -250,8 +246,7 @@ describe("project routes", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
     const config = loadConfig({
       STORAGE_DIR: path.join(tempDir, "storage"),
-      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite")
+      WORKSPACE_DIR: path.join(tempDir, "workspaces")
     });
     const app = await createServer(config);
 
@@ -267,7 +262,6 @@ describe("project routes", () => {
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
       WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
       TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
     });
     const app = await createServer(config);
@@ -281,6 +275,32 @@ describe("project routes", () => {
     expect(response.statusCode).toBe(201);
     const project = response.json();
     expect(project.name).toBe("Vue App");
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(false);
+    await app.close();
+  });
+
+  it("creates a project with an explicit react template", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-projects-"));
+    const config = loadConfig({
+      APP_ROOT: path.resolve(process.cwd()),
+      STORAGE_DIR: path.join(tempDir, "storage"),
+      WORKSPACE_DIR: path.join(tempDir, "workspaces"),
+      TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
+    });
+    const app = await createServer(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "React App", template: "react-vite" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    const project = response.json();
+    expect(project.name).toBe("React App");
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.tsx"))).toBe(true);
+    expect(existsSync(path.join(config.workspaceDir, project.id, "src", "App.vue"))).toBe(false);
     await app.close();
   });
 
@@ -290,7 +310,6 @@ describe("project routes", () => {
       APP_ROOT: path.resolve(process.cwd()),
       STORAGE_DIR: path.join(tempDir, "storage"),
       WORKSPACE_DIR: path.join(tempDir, "workspaces"),
-      TEMPLATE_DIR: path.resolve(process.cwd(), "templates/react-vite"),
       TEMPLATES_DIR: path.resolve(process.cwd(), "templates")
     });
     const app = await createServer(config);

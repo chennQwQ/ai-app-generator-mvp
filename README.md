@@ -25,6 +25,16 @@ Parent course files, videos, and docs are outside this Git repository boundary a
 
 See [docs/local-development.md](docs/local-development.md) for the local workflow with the fake agent and OpenCode provider.
 
+## Developer Documentation
+
+- [Product requirements](docs/product-requirements.md)
+- [Implementation guide](docs/implementation-guide.md)
+- [Development standards](docs/development-standards.md)
+- [Phase roadmap and status](docs/phase-roadmap.md)
+- [Developer onboarding](docs/developer-onboarding.md)
+
+Detailed historical plans are under [docs/superpowers/plans](docs/superpowers/plans).
+
 ## Planned Structure
 
 ```text
@@ -35,6 +45,7 @@ packages/
   shared/
 templates/
   react-vite/
+  vue-vite/
 docs/
   superpowers/
     specs/

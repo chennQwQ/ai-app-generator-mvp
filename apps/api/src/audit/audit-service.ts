@@ -3,7 +3,13 @@ import type Database from "better-sqlite3";
 import type { AuditLog } from "@ai-app-generator/shared";
 
 export class AuditService {
+  private closed = false;
+
   constructor(private readonly db: Database.Database) {}
+
+  close(): void {
+    this.closed = true;
+  }
 
   recordLog(params: {
     projectId: string;
@@ -12,7 +18,9 @@ export class AuditService {
     parameters: Record<string, unknown>;
     exitCode?: number;
     output?: string;
-  }): AuditLog {
+  }): AuditLog | null {
+    if (this.closed) return null;
+
     const id = nanoid();
     const now = new Date().toISOString();
     this.db.prepare(`

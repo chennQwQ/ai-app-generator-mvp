@@ -41,6 +41,7 @@ export async function createServer(config: AppConfig) {
 
   app.addHook("onClose", async () => {
     previewManager.stopAll();
+    audit.close();
     db.close();
   });
   app.get("/api/health", async () => {

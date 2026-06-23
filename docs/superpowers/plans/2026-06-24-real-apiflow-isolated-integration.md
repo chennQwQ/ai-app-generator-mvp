@@ -1,5 +1,11 @@
 # Real ApiFlow Isolated Integration Implementation Plan
 
+> **Superseded:** This single-file plan has been split into three execution plans so different developers can work in parallel without mixing main-repo work and external ApiFlow source work. Use:
+>
+> - `docs/superpowers/plans/2026-06-24-phase6-main-project-sidecar.md`
+> - `docs/superpowers/plans/2026-06-24-phase6-apiflow-source-extension.md`
+> - `docs/superpowers/plans/2026-06-24-phase6-end-to-end-integration.md`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Integrate the local `D:\doc\code\apiFlow项目课程\20250725_apiFlow` source as the real ApiFlow runtime while keeping all ApiFlow source code outside the `ai-app-generator-mvp` Git repository and impossible to accidentally push to the remote.

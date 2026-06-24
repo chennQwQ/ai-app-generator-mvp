@@ -11,6 +11,8 @@
     "dev": "npm run dev --workspace apps/api",
     "dev:api": "npm run dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
+    "dev:apiflow": "gradle -p apps/apiflow-sidecar :runtime:run",
+    "test:apiflow": "gradle -p apps/apiflow-sidecar :runtime:test",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"

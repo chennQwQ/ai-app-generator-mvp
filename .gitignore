@@ -42,3 +42,6 @@ Thumbs.db
 
 # Local implementation worktrees
 .worktrees/
+
+# Gradle local state
+.gradle/

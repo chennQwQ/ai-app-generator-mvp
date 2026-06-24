@@ -7,6 +7,11 @@ export interface HttpApiFlowConfig {
   timeout?: number;
 }
 
+type SidecarRunResponse = Partial<ApiFlowExternalRun> & {
+  runId?: string;
+  externalRunId?: string;
+};
+
 export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   private readonly compiler = new DslCompiler();
 
@@ -30,25 +35,33 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    const exported = await this.exportWorkflow(input);
+    const dsl = input.dsl ?? (await this.exportWorkflow(input)).dsl;
 
-    const response = await this.request<{ runId: string }>(
+    const response = await this.request<SidecarRunResponse>(
       `/api/apiflow/workflows/${encodeURIComponent(input.workflowId)}/runs`,
       {
         method: "POST",
-        body: JSON.stringify({ dsl: exported.dsl, input: { prompt: "" } })
+        body: JSON.stringify({
+          workflowId: input.workflowId,
+          workflowName: input.workflowName,
+          dsl,
+          input: input.input ?? {}
+        })
       }
     );
 
+    const externalRunId = response.externalRunId ?? response.runId;
+    if (!externalRunId) throw new Error("ApiFlow sidecar response did not include a run id");
+
     return {
-      externalRunId: response.runId,
-      workflowId: input.workflowId,
-      status: "queued",
-      result: null,
-      error: null,
-      startedAt: null,
-      finishedAt: null,
-      createdAt: new Date().toISOString()
+      externalRunId,
+      workflowId: response.workflowId ?? input.workflowId,
+      status: response.status ?? "queued",
+      result: response.result ?? null,
+      error: response.error ?? null,
+      startedAt: response.startedAt ?? null,
+      finishedAt: response.finishedAt ?? null,
+      createdAt: response.createdAt ?? new Date().toISOString()
     };
   }
 

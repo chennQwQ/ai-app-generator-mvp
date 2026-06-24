@@ -32,7 +32,8 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    await this.exportWorkflow(input);
+    if (!input.dsl) await this.exportWorkflow(input);
+
     const externalRunId = `apiflow-fake-${input.workflowId}-${nanoid()}`;
     const now = new Date().toISOString();
     const run: ApiFlowExternalRun = {

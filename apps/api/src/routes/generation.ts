@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
+import type { ApiFlowBridge } from "../apiflow/apiflow-bridge.js";
 import { ProjectNotFoundError, type ProjectService } from "../projects/project-service.js";
 import {
   DuplicateWorkflowNameError,
   InvalidWorkflowGraphError,
   type WorkflowService
 } from "../workflows/workflow-service.js";
+import { WorkflowRunActiveError } from "../workflows/workflow-executor.js";
 import { GenerationRouter, GenerationRoutingError } from "../generation/generation-router.js";
 import { UnsupportedGenerationRouteError, WorkflowFactory } from "../generation/workflow-factory.js";
 
@@ -12,6 +14,7 @@ export async function registerGenerationRoutes(
   app: FastifyInstance,
   projects: ProjectService,
   workflows: WorkflowService,
+  apiFlowBridge?: ApiFlowBridge,
   router = new GenerationRouter(),
   factory = new WorkflowFactory()
 ) {
@@ -22,30 +25,58 @@ export async function registerGenerationRoutes(
     if (!prompt) return reply.code(400).send({ message: "Generation prompt is required" });
 
     const conversationId = parseOptionalString(body, "conversationId");
-    const apiBaseUrl = parseOptionalString(body, "apiBaseUrl");
+    const apiBaseUrl = parseOptionalString(body, "apiBaseUrl") ?? "http://127.0.0.1:4317";
+    const shouldRun = parseOptionalBoolean(body, "run");
 
     try {
       projects.getWorkspacePath(projectId);
+      if (shouldRun && !apiFlowBridge) {
+        return reply.code(500).send({ message: "ApiFlow runtime is not configured" });
+      }
+
       const decision = router.route({ prompt });
       const generated = factory.create({ route: decision.route, prompt });
       const workflow = workflows.updateGraph(
         workflows.createWorkflow(projectId, generated.name).id,
         generated.graph
       );
+      const input = {
+        projectId,
+        workflowRunId: null as string | null,
+        conversationId,
+        prompt,
+        apiBaseUrl
+      };
 
-      return reply.code(201).send({
+      if (!shouldRun) {
+        return reply.code(201).send({
+          route: decision.route,
+          reason: decision.reason,
+          workflow,
+          dsl: generated.dsl,
+          nodeMap: generated.nodeMap,
+          input
+        });
+      }
+
+      const bridge = apiFlowBridge;
+      if (!bridge) {
+        return reply.code(500).send({ message: "ApiFlow runtime is not configured" });
+      }
+
+      const run = await bridge.startRun(workflow, {
+        dsl: generated.dsl,
+        input
+      });
+
+      return reply.code(202).send({
         route: decision.route,
         reason: decision.reason,
         workflow,
         dsl: generated.dsl,
         nodeMap: generated.nodeMap,
-        input: {
-          projectId,
-          workflowRunId: null,
-          conversationId,
-          prompt,
-          apiBaseUrl: apiBaseUrl ?? "http://127.0.0.1:4317"
-        }
+        input: { ...input, workflowRunId: run.id },
+        run
       });
     } catch (error) {
       if (error instanceof ProjectNotFoundError) {
@@ -62,6 +93,9 @@ export async function registerGenerationRoutes(
       }
       if (error instanceof InvalidWorkflowGraphError) {
         return reply.code(400).send({ message: error.message });
+      }
+      if (error instanceof WorkflowRunActiveError) {
+        return reply.code(409).send({ message: error.message });
       }
 
       request.log.error({ err: error }, "Generation workflow creation failed");
@@ -82,4 +116,9 @@ function parseOptionalString(body: unknown, key: string): string | null {
   if (!body || typeof body !== "object" || !(key in body)) return null;
   const value = (body as Record<string, unknown>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseOptionalBoolean(body: unknown, key: string): boolean {
+  if (!body || typeof body !== "object" || !(key in body)) return false;
+  return (body as Record<string, unknown>)[key] === true;
 }

@@ -5,6 +5,11 @@ import type { EventBus } from "../events/event-bus.js";
 import { WorkflowRunActiveError } from "../workflows/workflow-executor.js";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
 
+export interface ApiFlowStartRunOptions {
+  dsl?: string;
+  input?: Record<string, unknown>;
+}
+
 export class ApiFlowBridge {
   constructor(
     private readonly db: Database.Database,
@@ -14,19 +19,41 @@ export class ApiFlowBridge {
     private readonly maxPolls = 200
   ) {}
 
-  async startRun(workflow: WorkflowDetail): Promise<WorkflowRun> {
+  async startRun(workflow: WorkflowDetail, options: ApiFlowStartRunOptions = {}): Promise<WorkflowRun> {
     const activeRun = this.db.prepare(
       "select 1 from workflow_runs where project_id = ? and status in ('queued', 'running') limit 1"
     ).get(workflow.projectId);
     if (activeRun) throw new WorkflowRunActiveError(workflow.projectId);
 
-    const external = await this.adapter.startRun({
-      projectId: workflow.projectId,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      graph: workflow.graph
-    });
+    const runId = this.createQueuedRun(workflow);
+    const adapterInput = options.input
+      ? { ...options.input, workflowRunId: runId }
+      : undefined;
 
+    try {
+      const external = await this.adapter.startRun({
+        projectId: workflow.projectId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        graph: workflow.graph,
+        dsl: options.dsl,
+        input: adapterInput
+      });
+
+      this.updateRunFromExternal(runId, external);
+      const run = this.getRun(runId);
+      this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run });
+      void this.pollExternalRun(runId, workflow.projectId, external.externalRunId);
+      return run;
+    } catch (error) {
+      this.updateRunStatus(runId, "failed");
+      const failed = this.getRun(runId);
+      this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run: failed });
+      throw error;
+    }
+  }
+
+  private createQueuedRun(workflow: WorkflowDetail): string {
     const now = new Date().toISOString();
     const runId = nanoid();
     this.db.prepare(`
@@ -41,22 +68,9 @@ export class ApiFlowBridge {
         finished_at,
         created_at
       )
-      values (?, ?, ?, ?, 'apiflow', ?, ?, ?, ?)
-    `).run(
-      runId,
-      workflow.id,
-      workflow.projectId,
-      external.status,
-      external.externalRunId,
-      external.startedAt,
-      external.finishedAt,
-      now
-    );
-
-    const run = this.getRun(runId);
-    this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run });
-    void this.pollExternalRun(runId, workflow.projectId, external.externalRunId);
-    return run;
+      values (?, ?, ?, 'queued', 'apiflow', null, null, null, ?)
+    `).run(runId, workflow.id, workflow.projectId, now);
+    return runId;
   }
 
   private async pollExternalRun(runId: string, projectId: string, externalRunId: string): Promise<void> {
@@ -88,10 +102,11 @@ export class ApiFlowBridge {
     this.db.prepare(`
       update workflow_runs
       set status = ?,
+          external_run_id = coalesce(?, external_run_id),
           started_at = coalesce(?, started_at),
           finished_at = coalesce(?, finished_at)
       where id = ?
-    `).run(external.status, external.startedAt, external.finishedAt, runId);
+    `).run(external.status, external.externalRunId, external.startedAt, external.finishedAt, runId);
   }
 
   private updateRunStatus(runId: string, status: WorkflowRunStatus): void {

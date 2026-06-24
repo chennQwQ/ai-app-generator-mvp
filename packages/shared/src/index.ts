@@ -239,11 +239,9 @@ export interface ApiFlowExportResult {
   unsupportedNodes: string[];
 }
 
-export interface ApiFlowRunInput {
-  projectId: string;
-  workflowId: string;
-  workflowName: string;
-  graph: WorkflowGraph;
+export interface ApiFlowRunInput extends ApiFlowExportInput {
+  dsl?: string;
+  input?: Record<string, unknown>;
 }
 
 export interface ApiFlowExternalRun {

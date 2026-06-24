@@ -24,6 +24,7 @@ import { registerAuditRoutes } from "./routes/audit.js";
 import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerGenerationRoutes } from "./routes/generation.js";
+import { registerInternalAgentRunRoutes } from "./routes/internal-agent-runs.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerProjectRoutes } from "./routes/projects.js";
@@ -75,7 +76,7 @@ export async function createServer(config: AppConfig) {
   });
   await registerProjectRoutes(app, projects);
   await registerTemplateRoutes(app, templates);
-  await registerGenerationRoutes(app, projects, workflows);
+  await registerGenerationRoutes(app, projects, workflows, apiFlowBridge);
   await registerWorkflowRoutes(
     app,
     workflows,
@@ -87,6 +88,7 @@ export async function createServer(config: AppConfig) {
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
+  await registerInternalAgentRunRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);
   await registerDeployRoutes(app, projects, deployments);
   await registerWebSocketRoutes(app, bus);

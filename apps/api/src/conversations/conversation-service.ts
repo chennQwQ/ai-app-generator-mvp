@@ -113,6 +113,37 @@ export class ConversationService {
     })();
   }
 
+  createAgentRun(
+    projectId: string,
+    prompt: string,
+    command: string,
+    conversationId: string | null = null
+  ): AgentRun {
+    return this.db.transaction(() => {
+      const conversation = conversationId
+        ? this.getConversationById(projectId, conversationId)
+        : this.getConversation(projectId);
+      if (this.hasActiveRun(projectId)) throw new ActiveAgentRunError(projectId);
+
+      const now = new Date().toISOString();
+      const runId = nanoid();
+
+      this.db
+        .prepare(
+          `
+            insert into agent_runs (
+              id, project_id, conversation_id, status, prompt, command, created_at
+            )
+            values (?, ?, ?, 'queued', ?, ?, ?)
+          `
+        )
+        .run(runId, projectId, conversation.id, prompt, command, now);
+
+      this.touchConversation(conversation.id, now);
+      return this.getAgentRun(runId);
+    })();
+  }
+
   updateAgentRunStatus(
     runId: string,
     status: AgentRunStatus,
@@ -191,6 +222,14 @@ export class ConversationService {
     const row = this.db
       .prepare("select id from conversations where project_id = ? order by created_at asc limit 1")
       .get(projectId) as { id: string } | undefined;
+    if (!row) throw new ConversationNotFoundError(projectId);
+    return row;
+  }
+
+  private getConversationById(projectId: string, conversationId: string): { id: string } {
+    const row = this.db
+      .prepare("select id from conversations where id = ? and project_id = ? limit 1")
+      .get(conversationId, projectId) as { id: string } | undefined;
     if (!row) throw new ConversationNotFoundError(projectId);
     return row;
   }

@@ -23,6 +23,7 @@ import { DeploymentService } from "./deployments/deployment-service.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerFileRoutes } from "./routes/files.js";
+import { registerGenerationRoutes } from "./routes/generation.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerProjectRoutes } from "./routes/projects.js";
@@ -52,6 +53,7 @@ export async function createServer(config: AppConfig) {
       : undefined;
   const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter) : undefined;
   const deployments = new DeploymentService(db, config, bus, projects);
+  const workflows = new WorkflowService(db);
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);
@@ -73,9 +75,10 @@ export async function createServer(config: AppConfig) {
   });
   await registerProjectRoutes(app, projects);
   await registerTemplateRoutes(app, templates);
+  await registerGenerationRoutes(app, projects, workflows);
   await registerWorkflowRoutes(
     app,
-    new WorkflowService(db),
+    workflows,
     new WorkflowExecutor(db, bus, runner, audit, projects),
     apiFlowAdapter,
     apiFlowBridge

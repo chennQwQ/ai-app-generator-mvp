@@ -66,7 +66,8 @@ export async function registerGenerationRoutes(
 
       const run = await bridge.startRun(workflow, {
         dsl: generated.dsl,
-        input
+        input,
+        nodeMap: generated.nodeMap
       });
 
       return reply.code(202).send({

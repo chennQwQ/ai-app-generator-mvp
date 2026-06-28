@@ -4,10 +4,12 @@ import type { ApiFlowExternalRun, WorkflowDetail, WorkflowRun, WorkflowRunStatus
 import type { EventBus } from "../events/event-bus.js";
 import { WorkflowRunActiveError } from "../workflows/workflow-executor.js";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
+import type { ApiFlowEventService } from "./apiflow-event-service.js";
 
 export interface ApiFlowStartRunOptions {
   dsl?: string;
   input?: Record<string, unknown>;
+  nodeMap?: Record<string, string>;
 }
 
 export class ApiFlowBridge {
@@ -15,6 +17,7 @@ export class ApiFlowBridge {
     private readonly db: Database.Database,
     private readonly bus: EventBus,
     private readonly adapter: ApiFlowRuntimeAdapter,
+    private readonly events?: ApiFlowEventService,
     private readonly pollIntervalMs = 100,
     private readonly maxPolls = 200
   ) {}
@@ -25,7 +28,7 @@ export class ApiFlowBridge {
     ).get(workflow.projectId);
     if (activeRun) throw new WorkflowRunActiveError(workflow.projectId);
 
-    const runId = this.createQueuedRun(workflow);
+    const runId = this.createQueuedRun(workflow, options.nodeMap);
     const adapterInput = options.input
       ? { ...options.input, workflowRunId: runId }
       : undefined;
@@ -53,7 +56,7 @@ export class ApiFlowBridge {
     }
   }
 
-  private createQueuedRun(workflow: WorkflowDetail): string {
+  private createQueuedRun(workflow: WorkflowDetail, nodeMap: Record<string, string> | undefined): string {
     const now = new Date().toISOString();
     const runId = nanoid();
     this.db.prepare(`
@@ -70,6 +73,7 @@ export class ApiFlowBridge {
       )
       values (?, ?, ?, 'queued', 'apiflow', null, null, null, ?)
     `).run(runId, workflow.id, workflow.projectId, now);
+    this.events?.storeTaskNodeMap(runId, nodeMap);
     return runId;
   }
 

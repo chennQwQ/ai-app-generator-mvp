@@ -8,7 +8,23 @@ vi.mock("@monaco-editor/react", () => ({
 }));
 
 vi.mock("@xyflow/react", () => ({
-  ReactFlow: ({ children }: { children?: React.ReactNode }) => <div data-testid="react-flow">{children}</div>,
+  ReactFlow: ({
+    children,
+    nodes = [],
+    nodeTypes = {}
+  }: {
+    children?: React.ReactNode;
+    nodes?: Array<{ id: string; type: string; data: Record<string, unknown> }>;
+    nodeTypes?: Record<string, React.ComponentType<{ data: Record<string, unknown> }>>;
+  }) => (
+    <div data-testid="react-flow">
+      {nodes.map((node) => {
+        const NodeComponent = nodeTypes[node.type];
+        return NodeComponent ? <NodeComponent data={node.data} key={node.id} /> : null;
+      })}
+      {children}
+    </div>
+  ),
   Controls: () => <div data-testid="react-flow-controls" />,
   Background: () => <div data-testid="react-flow-background" />,
   Handle: () => <div data-testid="react-flow-handle" />,
@@ -365,6 +381,71 @@ describe("App", () => {
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText("Project event stream disconnected.")).not.toBeInTheDocument();
+  });
+
+  it("shows live workflow node status from websocket events", async () => {
+    responseOverrides.set("/api/projects/project-1/workflows", () =>
+      jsonResponse([
+        {
+          id: "workflow-1",
+          projectId: "project-1",
+          name: "Generated Workflow",
+          nodeCount: 2,
+          createdAt: "2026-06-23T00:00:00.000Z",
+          updatedAt: "2026-06-23T00:00:00.000Z"
+        }
+      ])
+    );
+    responseOverrides.set("/api/projects/project-1/workflows/workflow-1", () =>
+      jsonResponse({
+        id: "workflow-1",
+        projectId: "project-1",
+        name: "Generated Workflow",
+        nodeCount: 2,
+        graph: {
+          nodes: [
+            {
+              id: "node_parse_request",
+              type: "user_input",
+              position: { x: 0, y: 0 },
+              data: { prompt: "Create a notes app" }
+            },
+            {
+              id: "node_run_opencode",
+              type: "agent_generation",
+              position: { x: 260, y: 0 },
+              data: { label: "Generate code" }
+            }
+          ],
+          edges: []
+        },
+        createdAt: "2026-06-23T00:00:00.000Z",
+        updatedAt: "2026-06-23T00:00:00.000Z"
+      })
+    );
+
+    render(<App />);
+
+    await screen.findByRole("heading", { level: 2, name: "Demo Project" });
+    fireEvent.click(screen.getByRole("button", { name: /workflow/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /generated workflow/i }));
+
+    await screen.findByText("Create a notes app");
+
+    await act(async () => {
+      MockWebSocket.instances[0]?.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "workflow.node.status",
+            projectId: "project-1",
+            nodeId: "node_parse_request",
+            status: "running"
+          })
+        })
+      );
+    });
+
+    expect(screen.getByText("running")).toBeInTheDocument();
   });
 
   it("starts preview without sending an empty JSON content type", async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { WorkflowNodeType } from "@ai-app-generator/shared";
 import {
   ReactFlow,
@@ -37,6 +37,14 @@ export function WorkflowCanvas({ nodes: initialNodes, edges: initialEdges, onGra
   const onGraphChangeRef = useRef(onGraphChange);
   onGraphChangeRef.current = onGraphChange;
   const { screenToFlowPosition } = useReactFlow();
+
+  useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(initialEdges);
+  }, [initialEdges, setEdges]);
 
   const handleNodesChange: OnNodesChange = useCallback(
     (changes) => {

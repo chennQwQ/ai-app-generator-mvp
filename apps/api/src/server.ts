@@ -18,9 +18,11 @@ import { WorkflowService } from "./workflows/workflow-service.js";
 import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { FakeApiFlowRuntimeAdapter } from "./apiflow/apiflow-adapter.js";
 import { ApiFlowBridge } from "./apiflow/apiflow-bridge.js";
+import { ApiFlowEventService } from "./apiflow/apiflow-event-service.js";
 import { HttpApiFlowRuntimeAdapter } from "./apiflow/apiflow-http-adapter.js";
 import { DeploymentService } from "./deployments/deployment-service.js";
 import { registerAuditRoutes } from "./routes/audit.js";
+import { registerApiFlowEventRoutes } from "./routes/apiflow-events.js";
 import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerGenerationRoutes } from "./routes/generation.js";
@@ -47,12 +49,13 @@ export async function createServer(config: AppConfig) {
   const previewManager = new PreviewManager(config, bus, undefined, (projectId, preview) => {
     projects.updatePreview(projectId, preview);
   });
+  const apiFlowEvents = new ApiFlowEventService(db, bus);
   const apiFlowAdapter = config.workflowRuntime === "apiflow"
     ? new FakeApiFlowRuntimeAdapter()
     : config.workflowRuntime === "apiflow-http"
       ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl })
       : undefined;
-  const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter) : undefined;
+  const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter, apiFlowEvents) : undefined;
   const deployments = new DeploymentService(db, config, bus, projects);
   const workflows = new WorkflowService(db);
 
@@ -88,6 +91,7 @@ export async function createServer(config: AppConfig) {
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
+  await registerApiFlowEventRoutes(app, apiFlowEvents);
   await registerInternalAgentRunRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);
   await registerDeployRoutes(app, projects, deployments);

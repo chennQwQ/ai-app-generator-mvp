@@ -266,6 +266,14 @@ function spawnOpenCode(
     process.platform === "win32" ? resolveWindowsCommand(commandName, workspacePath) : commandName;
 
   if (process.platform === "win32" && isWindowsCommandShim(resolvedCommand)) {
+    const nodeShimTarget = resolveWindowsNodeShimTarget(resolvedCommand);
+    if (nodeShimTarget) {
+      return spawn(nodeShimTarget.command, [...nodeShimTarget.args, ...args], {
+        cwd: workspacePath,
+        windowsHide: true
+      });
+    }
+
     return spawn(
       process.env.ComSpec ?? "cmd.exe",
       ["/d", "/s", "/c", buildWindowsShimCommand(resolvedCommand, args)],
@@ -287,10 +295,12 @@ function killAgentProcess(child: ChildProcessWithoutNullStreams): void {
   if (child.killed) return;
 
   if (process.platform === "win32" && child.pid) {
-    spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+    const result = spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
       stdio: "ignore",
+      timeout: 2000,
       windowsHide: true
     });
+    if (result.error || result.status !== 0) child.kill("SIGKILL");
     return;
   }
 
@@ -341,6 +351,35 @@ function hasPathSeparator(value: string): boolean {
 function isWindowsCommandShim(commandName: string): boolean {
   const extension = path.extname(commandName).toLowerCase();
   return extension === ".cmd" || extension === ".bat";
+}
+
+function resolveWindowsNodeShimTarget(commandName: string): { command: string; args: string[] } | null {
+  let source: string;
+  try {
+    source = readFileSync(commandName, "utf8");
+  } catch {
+    return null;
+  }
+
+  for (const rawLine of source.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || !line.includes("%*")) continue;
+
+    const match = line.match(
+      /(?:^|[&|]\s*)@?(?:"?%_prog%"?|"?node(?:\.exe)?"?)\s+"([^"]+)"\s+%\*/i
+    );
+    if (!match?.[1]) continue;
+
+    const scriptPath = resolveWindowsShimScriptPath(match[1], path.dirname(commandName));
+    if (existsSync(scriptPath)) return { command: process.execPath, args: [scriptPath] };
+  }
+
+  return null;
+}
+
+function resolveWindowsShimScriptPath(scriptPath: string, shimDir: string): string {
+  const expanded = scriptPath.replace(/%dp0%/gi, shimDir);
+  return path.isAbsolute(expanded) ? expanded : path.resolve(shimDir, expanded);
 }
 
 function buildWindowsShimCommand(commandName: string, args: string[]): string {

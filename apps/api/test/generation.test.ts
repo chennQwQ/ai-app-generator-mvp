@@ -85,6 +85,10 @@ describe("generation routes", () => {
       });
       expect(body.dsl).toContain("task_parse_request = EVAL");
       expect(body.dsl).toContain("task_run_opencode = HTTP");
+      expect(body.dsl).toContain('url = input.apiBaseUrl + "/internal/apiflow-events"');
+      expect(body.dsl).toContain('taskId: "task_parse_request"');
+      expect(body.dsl).toContain('status: "running"');
+      expect(body.dsl).toContain('status: "succeeded"');
       expect(body.dsl).toContain('url = input.apiBaseUrl + "/internal/agent-runs"');
       expect(body.dsl).toContain('nodeId: "node_run_opencode"');
       expect(body.dsl).toContain("run task_parse_request");

@@ -89,10 +89,15 @@ function buildDsl(steps: WorkflowStep[]): string {
   const lines: string[] = [];
 
   for (const step of steps) {
+    lines.push(...buildTaskEventDsl(step.taskName, "running"));
+    lines.push("");
+
     if (step.dslKind === "eval_prompt") {
       lines.push(`${step.taskName} = EVAL {`);
       lines.push("    input.prompt");
       lines.push("}");
+      lines.push("");
+      lines.push(...buildTaskEventDsl(step.taskName, "succeeded"));
       lines.push("");
       continue;
     }
@@ -113,11 +118,34 @@ function buildDsl(steps: WorkflowStep[]): string {
 
   lines.push("start {");
   for (const step of steps) {
+    lines.push(`    run ${taskEventName(step.taskName, "running")}`);
     lines.push(`    run ${step.taskName}`);
+    if (step.dslKind === "eval_prompt") {
+      lines.push(`    run ${taskEventName(step.taskName, "succeeded")}`);
+    }
   }
   lines.push("}");
 
   return lines.join("\n");
+}
+
+function buildTaskEventDsl(taskName: string, status: "running" | "succeeded"): string[] {
+  return [
+    `${taskEventName(taskName, status)} = HTTP {`,
+    '    method = "POST"',
+    '    url = input.apiBaseUrl + "/internal/apiflow-events"',
+    "    json([",
+    "        projectId: input.projectId,",
+    "        workflowRunId: input.workflowRunId,",
+    `        taskId: "${escapeGroovyString(taskName)}",`,
+    `        status: "${status}"`,
+    "    ])",
+    "}"
+  ];
+}
+
+function taskEventName(taskName: string, status: "running" | "succeeded"): string {
+  return `event_${taskName}_${status}`;
 }
 
 function workflowName(prompt: string): string {

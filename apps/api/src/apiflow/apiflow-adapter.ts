@@ -1,4 +1,4 @@
-import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
+import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalEvent, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
 import { nanoid } from "nanoid";
 import { ApiFlowExportValidationError, DslCompiler } from "./dsl-compiler.js";
 
@@ -6,6 +6,7 @@ export interface ApiFlowRuntimeAdapter {
   exportWorkflow(input: ApiFlowExportInput): Promise<ApiFlowExportResult>;
   startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun>;
   getRun(externalRunId: string): Promise<ApiFlowExternalRun>;
+  getEvents?(externalRunId: string, afterSequence: number): Promise<ApiFlowExternalEvent[]>;
   cancelRun(externalRunId: string): Promise<void>;
   healthCheck(): Promise<{ ok: boolean; reason?: string }>;
 }
@@ -32,7 +33,8 @@ export class FakeApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    await this.exportWorkflow(input);
+    if (!input.dsl) await this.exportWorkflow(input);
+
     const externalRunId = `apiflow-fake-${input.workflowId}-${nanoid()}`;
     const now = new Date().toISOString();
     const run: ApiFlowExternalRun = {

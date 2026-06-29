@@ -29,6 +29,7 @@ describe("database schema", () => {
       expect(tables).toContain("audit_logs");
       expect(tables).toContain("workflows");
       expect(tables).toContain("workflow_runs");
+      expect(tables).toContain("workflow_task_nodes");
       expect(tables).toContain("deployments");
 
       const workflowRunColumns = db
@@ -37,6 +38,17 @@ describe("database schema", () => {
         .map((row: any) => row.name);
       expect(workflowRunColumns).toContain("runtime");
       expect(workflowRunColumns).toContain("external_run_id");
+
+      const workflowTaskNodeColumns = db
+        .prepare("pragma table_info(workflow_task_nodes)")
+        .all()
+        .map((row: any) => row.name);
+      expect(workflowTaskNodeColumns).toEqual([
+        "workflow_run_id",
+        "task_id",
+        "node_id",
+        "created_at",
+      ]);
     } finally {
       db.close();
     }

@@ -239,11 +239,9 @@ export interface ApiFlowExportResult {
   unsupportedNodes: string[];
 }
 
-export interface ApiFlowRunInput {
-  projectId: string;
-  workflowId: string;
-  workflowName: string;
-  graph: WorkflowGraph;
+export interface ApiFlowRunInput extends ApiFlowExportInput {
+  dsl?: string;
+  input?: Record<string, unknown>;
 }
 
 export interface ApiFlowExternalRun {
@@ -255,6 +253,18 @@ export interface ApiFlowExternalRun {
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
+}
+
+export interface ApiFlowExternalEvent {
+  sequence: number;
+  externalRunId: string;
+  type: string;
+  nodeId: string | null;
+  taskId: string | null;
+  status: string | null;
+  message: string | null;
+  at: string | null;
+  payload: Record<string, unknown>;
 }
 
 export type DeploymentStatus = "building" | "succeeded" | "failed";

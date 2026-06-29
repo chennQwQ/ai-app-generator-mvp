@@ -1,4 +1,4 @@
-import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
+import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalEvent, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
 import { ApiFlowExportValidationError, DslCompiler } from "./dsl-compiler.js";
 
@@ -6,6 +6,15 @@ export interface HttpApiFlowConfig {
   baseUrl: string;
   timeout?: number;
 }
+
+type SidecarRunResponse = Partial<ApiFlowExternalRun> & {
+  runId?: string;
+  externalRunId?: string;
+};
+
+type SidecarRunEvent = Partial<ApiFlowExternalEvent> & {
+  runId?: string;
+};
 
 export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   private readonly compiler = new DslCompiler();
@@ -30,25 +39,33 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
   }
 
   async startRun(input: ApiFlowRunInput): Promise<ApiFlowExternalRun> {
-    const exported = await this.exportWorkflow(input);
+    const dsl = input.dsl ?? (await this.exportWorkflow(input)).dsl;
 
-    const response = await this.request<{ runId: string }>(
+    const response = await this.request<SidecarRunResponse>(
       `/api/apiflow/workflows/${encodeURIComponent(input.workflowId)}/runs`,
       {
         method: "POST",
-        body: JSON.stringify({ dsl: exported.dsl, input: { prompt: "" } })
+        body: JSON.stringify({
+          workflowId: input.workflowId,
+          workflowName: input.workflowName,
+          dsl,
+          input: input.input ?? {}
+        })
       }
     );
 
+    const externalRunId = response.externalRunId ?? response.runId;
+    if (!externalRunId) throw new Error("ApiFlow sidecar response did not include a run id");
+
     return {
-      externalRunId: response.runId,
-      workflowId: input.workflowId,
-      status: "queued",
-      result: null,
-      error: null,
-      startedAt: null,
-      finishedAt: null,
-      createdAt: new Date().toISOString()
+      externalRunId,
+      workflowId: response.workflowId ?? input.workflowId,
+      status: response.status ?? "queued",
+      result: response.result ?? null,
+      error: response.error ?? null,
+      startedAt: response.startedAt ?? null,
+      finishedAt: response.finishedAt ?? null,
+      createdAt: response.createdAt ?? new Date().toISOString()
     };
   }
 
@@ -56,6 +73,23 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
     return this.request<ApiFlowExternalRun>(
       `/api/apiflow/runs/${encodeURIComponent(externalRunId)}`
     );
+  }
+
+  async getEvents(externalRunId: string, afterSequence: number): Promise<ApiFlowExternalEvent[]> {
+    const response = await this.request<SidecarRunEvent[]>(
+      `/api/apiflow/runs/${encodeURIComponent(externalRunId)}/events?after=${afterSequence}`
+    );
+    return response.map((event) => ({
+      sequence: event.sequence ?? 0,
+      externalRunId: event.externalRunId ?? event.runId ?? externalRunId,
+      type: event.type ?? "event",
+      nodeId: event.nodeId ?? null,
+      taskId: event.taskId ?? readStringPayload(event.payload, "taskId"),
+      status: event.status ?? null,
+      message: event.message ?? null,
+      at: event.at ?? null,
+      payload: event.payload ?? {}
+    }));
   }
 
   async cancelRun(externalRunId: string): Promise<void> {
@@ -67,7 +101,7 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
 
   async healthCheck(): Promise<{ ok: boolean; reason?: string }> {
     try {
-      await this.request("/api/apiflow/health");
+      await this.request("/health");
       return { ok: true };
     } catch (error) {
       return {
@@ -106,4 +140,9 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
       clearTimeout(timeout);
     }
   }
+}
+
+function readStringPayload(payload: Record<string, unknown> | undefined, key: string): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

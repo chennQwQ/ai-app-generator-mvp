@@ -75,6 +75,7 @@ export function App() {
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [workflowGraph, setWorkflowGraph] = useState<WorkflowDetail | null>(null);
   const [workflowRun, setWorkflowRun] = useState<WorkflowRun | null>(null);
+  const [workflowNodeStatuses, setWorkflowNodeStatuses] = useState<Record<string, string>>({});
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deployStatus, setDeployStatus] = useState<DeploymentInfo | null>(null);
@@ -86,6 +87,26 @@ export function App() {
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects]
   );
+  const workflowCanvasNodes = useMemo(() => {
+    if (!workflowGraph) return [];
+    return workflowGraph.graph.nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data: {
+        ...n.data,
+        status: workflowNodeStatuses[n.id] ?? null
+      }
+    }));
+  }, [workflowGraph, workflowNodeStatuses]);
+  const workflowCanvasEdges = useMemo(() => {
+    if (!workflowGraph) return [];
+    return workflowGraph.graph.edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target
+    }));
+  }, [workflowGraph]);
 
   const reloadProjects = useCallback(async () => {
     const result = await listProjects(projectSearch || undefined, projectSort, projectOrder);
@@ -140,6 +161,7 @@ export function App() {
       setActiveWorkflowId(null);
       setWorkflowGraph(null);
       setWorkflowRun(null);
+      setWorkflowNodeStatuses({});
       return;
     }
 
@@ -201,7 +223,10 @@ export function App() {
         setIsRunningWorkflow(event.run.status === "queued" || event.run.status === "running");
       }
       if (event.type === "workflow.node.status") {
-        // node status updates received in real-time
+        setWorkflowNodeStatuses((current) => ({
+          ...current,
+          [event.nodeId]: event.status
+        }));
       }
       if (event.type === "deploy.status") {
         setDeployStatus(event.deploy);
@@ -364,6 +389,7 @@ export function App() {
       setWorkflows((current) => [wf, ...current]);
       setActiveWorkflowId(wf.id);
       setWorkflowGraph(wf);
+      setWorkflowNodeStatuses({});
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -392,6 +418,7 @@ export function App() {
       setActiveWorkflowId(workflowId);
       const wf = await getWorkflow(projectId, workflowId);
       setWorkflowGraph(wf);
+      setWorkflowNodeStatuses({});
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -407,6 +434,7 @@ export function App() {
       if (activeWorkflowId === workflowId) {
         setActiveWorkflowId(null);
         setWorkflowGraph(null);
+        setWorkflowNodeStatuses({});
       }
     } catch (caught) {
       setError(errorMessage(caught));
@@ -426,7 +454,7 @@ export function App() {
             id: n.id,
             type: n.type ?? "user_input",
             position: n.position,
-            data: n.data ?? {}
+            data: stripTransientNodeData(n.data)
           })),
           edges: edges.map((e: any) => ({
             id: e.id,
@@ -451,6 +479,7 @@ export function App() {
     try {
       setError(null);
       setIsRunningWorkflow(true);
+      setWorkflowNodeStatuses({});
       const run = await runWorkflow(projectId, workflowId);
       setWorkflowRun(run);
     } catch (caught) {
@@ -751,17 +780,8 @@ export function App() {
                   <WorkflowToolbar onAddNode={handleAddNode} />
                   <div className="workflow-canvas-wrapper">
                     <WorkflowCanvas
-                      nodes={workflowGraph.graph.nodes.map((n) => ({
-                        id: n.id,
-                        type: n.type,
-                        position: n.position,
-                        data: n.data
-                      }))}
-                      edges={workflowGraph.graph.edges.map((e) => ({
-                        id: e.id,
-                        source: e.source,
-                        target: e.target
-                      }))}
+                      nodes={workflowCanvasNodes}
+                      edges={workflowCanvasEdges}
                       onGraphChange={handleGraphChange}
                     />
                     {workflowRun ? (
@@ -865,6 +885,12 @@ function parseProjectEvent(data: string): ProjectEvent | null {
   } catch {
     return null;
   }
+}
+
+function stripTransientNodeData(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const { status: _status, ...persistentData } = data as Record<string, unknown>;
+  return persistentData;
 }
 
 function errorMessage(error: unknown): string {

@@ -1,32 +1,68 @@
 import { nanoid } from "nanoid";
 import type Database from "better-sqlite3";
-import type { ApiFlowExternalRun, WorkflowDetail, WorkflowRun, WorkflowRunStatus } from "@ai-app-generator/shared";
+import type {
+  ApiFlowExternalEvent,
+  ApiFlowExternalRun,
+  WorkflowDetail,
+  WorkflowRun,
+  WorkflowRunStatus
+} from "@ai-app-generator/shared";
 import type { EventBus } from "../events/event-bus.js";
 import { WorkflowRunActiveError } from "../workflows/workflow-executor.js";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
+import type { ApiFlowEventService } from "./apiflow-event-service.js";
+
+export interface ApiFlowStartRunOptions {
+  dsl?: string;
+  input?: Record<string, unknown>;
+  nodeMap?: Record<string, string>;
+}
 
 export class ApiFlowBridge {
   constructor(
     private readonly db: Database.Database,
     private readonly bus: EventBus,
     private readonly adapter: ApiFlowRuntimeAdapter,
+    private readonly events?: ApiFlowEventService,
     private readonly pollIntervalMs = 100,
     private readonly maxPolls = 200
   ) {}
 
-  async startRun(workflow: WorkflowDetail): Promise<WorkflowRun> {
+  async startRun(workflow: WorkflowDetail, options: ApiFlowStartRunOptions = {}): Promise<WorkflowRun> {
     const activeRun = this.db.prepare(
       "select 1 from workflow_runs where project_id = ? and status in ('queued', 'running') limit 1"
     ).get(workflow.projectId);
     if (activeRun) throw new WorkflowRunActiveError(workflow.projectId);
 
-    const external = await this.adapter.startRun({
-      projectId: workflow.projectId,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      graph: workflow.graph
-    });
+    const runId = this.createQueuedRun(workflow, options.nodeMap);
+    const adapterInput = options.input
+      ? { ...options.input, workflowRunId: runId }
+      : undefined;
 
+    try {
+      const external = await this.adapter.startRun({
+        projectId: workflow.projectId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        graph: workflow.graph,
+        dsl: options.dsl,
+        input: adapterInput
+      });
+
+      this.updateRunFromExternal(runId, external);
+      const run = this.getRun(runId);
+      this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run });
+      void this.pollExternalRun(runId, workflow.projectId, external.externalRunId);
+      return run;
+    } catch (error) {
+      this.updateRunStatus(runId, "failed");
+      const failed = this.getRun(runId);
+      this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run: failed });
+      throw error;
+    }
+  }
+
+  private createQueuedRun(workflow: WorkflowDetail, nodeMap: Record<string, string> | undefined): string {
     const now = new Date().toISOString();
     const runId = nanoid();
     this.db.prepare(`
@@ -41,32 +77,22 @@ export class ApiFlowBridge {
         finished_at,
         created_at
       )
-      values (?, ?, ?, ?, 'apiflow', ?, ?, ?, ?)
-    `).run(
-      runId,
-      workflow.id,
-      workflow.projectId,
-      external.status,
-      external.externalRunId,
-      external.startedAt,
-      external.finishedAt,
-      now
-    );
-
-    const run = this.getRun(runId);
-    this.bus.publish({ type: "workflow.run.status", projectId: workflow.projectId, run });
-    void this.pollExternalRun(runId, workflow.projectId, external.externalRunId);
-    return run;
+      values (?, ?, ?, 'queued', 'apiflow', null, null, null, ?)
+    `).run(runId, workflow.id, workflow.projectId, now);
+    this.events?.storeTaskNodeMap(runId, nodeMap);
+    return runId;
   }
 
   private async pollExternalRun(runId: string, projectId: string, externalRunId: string): Promise<void> {
     try {
+      let lastEventSequence = 0;
       for (let attempt = 0; attempt < this.maxPolls; attempt++) {
         await delay(this.pollIntervalMs);
 
         const localRun = this.getRun(runId);
         if (isTerminalStatus(localRun.status)) return;
 
+        lastEventSequence = await this.pollExternalEvents(runId, projectId, externalRunId, lastEventSequence);
         const external = await this.adapter.getRun(externalRunId);
         this.updateRunFromExternal(runId, external);
         const updated = this.getRun(runId);
@@ -84,14 +110,65 @@ export class ApiFlowBridge {
     }
   }
 
+  private async pollExternalEvents(
+    runId: string,
+    projectId: string,
+    externalRunId: string,
+    lastEventSequence: number
+  ): Promise<number> {
+    if (!this.adapter.getEvents) return lastEventSequence;
+
+    let events: ApiFlowExternalEvent[];
+    try {
+      events = await this.adapter.getEvents(externalRunId, lastEventSequence);
+    } catch {
+      return lastEventSequence;
+    }
+
+    let nextSequence = lastEventSequence;
+    for (const event of events) {
+      nextSequence = Math.max(nextSequence, event.sequence);
+      this.publishExternalEvent(runId, projectId, event);
+    }
+    return nextSequence;
+  }
+
+  private publishExternalEvent(runId: string, projectId: string, event: ApiFlowExternalEvent): void {
+    if (!event.status || !isWorkflowStatus(event.status)) return;
+
+    if (event.nodeId) {
+      this.bus.publish({
+        type: "workflow.node.status",
+        projectId,
+        nodeId: event.nodeId,
+        status: event.status
+      });
+      return;
+    }
+
+    if (event.taskId && this.events) {
+      try {
+        this.events.publishTaskEvent({
+          projectId,
+          workflowRunId: runId,
+          taskId: event.taskId,
+          status: event.status
+        });
+      } catch {
+        // External sidecar events are best-effort; run status polling remains authoritative.
+      }
+    }
+  }
+
   private updateRunFromExternal(runId: string, external: ApiFlowExternalRun): void {
     this.db.prepare(`
       update workflow_runs
       set status = ?,
+          external_run_id = coalesce(?, external_run_id),
           started_at = coalesce(?, started_at),
           finished_at = coalesce(?, finished_at)
       where id = ?
-    `).run(external.status, external.startedAt, external.finishedAt, runId);
+    `).run(external.status, external.externalRunId, external.startedAt, external.finishedAt, runId);
   }
 
   private updateRunStatus(runId: string, status: WorkflowRunStatus): void {
@@ -124,6 +201,10 @@ export class ApiFlowBridge {
 
 function isTerminalStatus(status: WorkflowRunStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+function isWorkflowStatus(status: string): status is WorkflowRunStatus {
+  return status === "queued" || status === "running" || status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 function delay(ms: number): Promise<void> {

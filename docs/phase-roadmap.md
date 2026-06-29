@@ -190,7 +190,7 @@ Reference plan:
 
 ## Phase 6: ApiFlow Runtime Integration
 
-Status: Planned.
+Status: In progress.
 
 Goal: connect the visual workflow model to the ApiFlow execution backend.
 
@@ -199,14 +199,28 @@ Pre-development assessment:
 - ApiFlow can support a limited vertical slice as an execution kernel, but it does not yet provide the runtime control plane, structured execution events, external run IDs, or full Studio node coverage needed for the complete Phase 6 scope.
 - Detailed assessment and recommended work breakdown: `docs/phase6-apiflow-integration-assessment.md`
 
-Planned scope:
+Implemented so far:
 
 - Define workflow export format.
 - Map Studio nodes to ApiFlow nodes.
 - Add execution adapter boundary.
 - Add backend route to trigger ApiFlow execution.
 - Persist external execution IDs and statuses.
-- Surface ApiFlow logs/events in the Studio event stream.
+- Add isolated Java sidecar wrapper that runs generated DSL through ApiFlow.
+- Generate prompt-driven workflow graph + DSL + task/node mapping.
+- Route generated workflows through the ApiFlow bridge.
+- Trigger OpenCode from ApiFlow-owned DSL via `/internal/agent-runs`.
+- Accept task callbacks through `/internal/apiflow-events`.
+- Poll sidecar run events through `HttpApiFlowRuntimeAdapter.getEvents(...)`.
+- Surface node status events in the workflow canvas.
+
+Remaining scope:
+
+- Emit real task-level events from ApiFlow core or sidecar wrappers, instead of relying mainly on DSL HTTP callbacks.
+- Persist workflow event/log history beyond transient WebSocket delivery.
+- Add cancellation propagation from Studio runs into the sidecar runtime.
+- Expand ApiFlow-native node coverage beyond the current prompt-generation vertical slice.
+- Run and document a full local end-to-end smoke test with `APIFLOW_SOURCE_DIR`.
 
 Risks:
 

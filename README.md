@@ -4,68 +4,132 @@
 
 ![](./assets/demo.png)
 
+## MVP Goal
+
+Build a Web Studio where a user can describe an application, start a local code Agent, stream generation logs, inspect generated files, and preview the generated app.
+
 ## 核心架构：双流程引擎
 
-### 1. 开发流程 — AI 代码生成
+### 1. 开发流程 - AI 代码生成
 
-```
-开发者 ──▶ Web Studio (Generator)
-              │
-              │  OpenCode SDK (fork 独立进程)
-              ▼
-         OpenCode 进程 ──▶ 沙箱内读写项目文件
-              │
-              │  实时流式返回
-              ▼
-         Web Studio UI ◀── 逐条展示生成日志
-```
-
-- 开发者在 Web Studio 对话框中用自然语言描述应用需求
-- Generator 通过 **OpenCode SDK** 为每个对话独立 fork 一个 **OpenCode 进程**
-- 用户消息转发给 OpenCode，OpenCode 实时返回生成/修改日志，逐条流式推送到前端界面
-- Agent **沙箱隔离**：每个 OpenCode 进程仅被允许读写对应项目目录下的文件
-- **多会话并行**：多个对话各自持有独立的 OpenCode 进程，互不干扰
-
-### 2. 运行流程 — apiFlow 引擎
-
-```
-用户 ──浏览器 / API──▶ apiFlow Service ──▶ Engine 加载项目目录
-                                              │
-                                    ClassLoader 机制隔离运行
+```text
+开发者 -> Web Studio (Generator)
+             |
+             | OpenCode CLI / Agent process
+             v
+        OpenCode 进程 -> 沙箱内读写项目文件
+             |
+             | 实时流式返回
+             v
+        Web Studio UI <- 逐条展示生成日志
 ```
 
-- 用户通过浏览器访问或 API 调用 **apiFlow 服务**
-- apiFlow 引擎 **独立加载** 对应项目目录的产物
-- 采用 **ClassLoader 机制** 实现多项目运行时隔离，各项目之间资源、依赖互不干扰
+- 开发者在 Web Studio 对话框中用自然语言描述应用需求。
+- Generator 为每次生成运行启动独立的 OpenCode 进程。
+- 用户消息转发给 OpenCode，OpenCode 实时返回生成/修改日志，并流式推送到前端界面。
+- Agent 只读写对应项目目录下的文件。
+- 不同项目可以并行运行；同一项目的写入型生成运行由后端串行控制。
+
+### 2. 运行流程 - ApiFlow 引擎
+
+```text
+用户 -> 浏览器 / API -> Generator API -> ApiFlow Sidecar -> FlowEngine
+                              |
+                              v
+                         OpenCode / project workspace
+```
+
+- Generator API 是项目状态、工作目录、运行记录和浏览器事件的系统边界。
+- ApiFlow Sidecar 作为长驻 Java 服务执行生成出的 Groovy DSL。
+- ApiFlow 不直接定位或修改项目目录；需要写文件时通过 Generator API 触发 OpenCode。
+- Sidecar 运行状态和任务事件回传给 Generator API，再由 Generator API 推送到 Web UI。
+
+## Phase 6 ApiFlow Routing
+
+Generator API owns intent routing, workflow construction, project state, and OpenCode orchestration. ApiFlow receives a generated workflow DSL from the API, runs it through the long-lived sidecar service, and reports run/task events back to the API so the UI can render workflow status as a graph.
+
+Current implementation status: prompt-driven workflow generation, ApiFlow sidecar run start/status polling, `/internal/agent-runs`, `/internal/apiflow-events`, sidecar event polling, and live workflow node status rendering are implemented. Remaining Phase 6 work is real ApiFlow task event emission, durable workflow event/log history, cancellation propagation, and broader node coverage.
+
+```mermaid
+sequenceDiagram
+    participant U as "User"
+    participant W as "Web UI"
+    participant API as "Generator API"
+    participant R as "Intent Router"
+    participant F as "Workflow Factory"
+    participant AF as "ApiFlow Sidecar"
+    participant OC as "OpenCode"
+
+    U->>W: "Create a library management system"
+    W->>API: POST /projects/:id/messages
+    API->>R: classify(prompt, projectState)
+    R-->>API: route = create_app_from_prompt
+    API->>F: buildWorkflow(route, prompt, projectId)
+    F-->>API: graph + groovyDsl + nodeMap
+    API->>AF: POST /api/apiflow/workflows/:id/runs
+    AF->>AF: FlowEngine.reLoad + execute(main.groovy)
+    AF->>API: run events / task events
+    API->>OC: start opencode task when workflow reaches opencode node
+    OC-->>API: files / logs / status
+    API-->>W: websocket events
+    W-->>U: graph node status + file changes
+```
+
+## Repository Boundary
+
+Git must be initialized and used from this directory:
+
+```powershell
+cd <project-root>
+git status
+```
+
+Do not run `git add` or `git commit` from the parent course directory.
+
+Parent course files, videos, archives, extracted frames, and the external `20250725_apiFlow` source tree are outside this Git repository boundary and must not be committed.
 
 ## 仓库结构
 
 ```text
 apps/
-  api/            # 后端 API 服务（项目编排、Agent 调度、apiFlow 引擎）
-  web/            # 前端 Web Studio（对话、文件浏览、预览、工作流编辑）
+  api/                  # 后端 API 服务：项目编排、Agent 调度、ApiFlow runtime adapter
+  web/                  # 前端 Web Studio：对话、文件浏览、预览、工作流编辑
+  apiflow-sidecar/      # Java sidecar wrapper；不包含外部 ApiFlow 源码
 packages/
-  shared/         # 共享类型与工具
+  shared/               # 共享类型与工具
 templates/
-  react-vite/     # 内置 React 模板
-  vue-vite/       # 内置 Vue 模板
+  react-vite/           # 内置 React 模板
+  vue-vite/             # 内置 Vue 模板
 docs/
-  superpowers/    # 设计规范与实现计划
-workspaces/       # 生成的应用运行时目录（gitignore）
+  superpowers/          # 设计规格与实现计划
+workspaces/             # 生成的应用运行时目录，已 gitignore
 ```
 
 ## 本地开发
 
 ```powershell
 # 安装依赖
-pnpm install
+npm install
 
 # 启动 API 服务
-pnpm --filter @ai-app-generator/api dev
+npm run dev:api
 
 # 启动前端
-pnpm --filter @ai-app-generator/web dev
+npm run dev:web
+
+# 启动 ApiFlow sidecar
+npm run dev:apiflow
 ```
 
-详见 [docs/local-development.md](docs/local-development.md)。
+See [docs/local-development.md](docs/local-development.md) for detailed local workflow setup.
 
+## Developer Documentation
+
+- [Product requirements](docs/product-requirements.md)
+- [ApiFlow project routing design](docs/superpowers/specs/2026-06-24-apiflow-project-routing-design.md)
+- [Implementation guide](docs/implementation-guide.md)
+- [Development standards](docs/development-standards.md)
+- [Phase roadmap and status](docs/phase-roadmap.md)
+- [Developer onboarding](docs/developer-onboarding.md)
+
+Detailed historical plans are under [docs/superpowers/plans](docs/superpowers/plans).

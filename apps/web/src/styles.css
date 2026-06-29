@@ -852,6 +852,26 @@ a {
   min-width: 140px;
 }
 
+.workflow-node-running {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16);
+}
+
+.workflow-node-succeeded {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.14);
+}
+
+.workflow-node-failed {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.14);
+}
+
+.workflow-node-cancelled {
+  border-color: #6b7280;
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.14);
+}
+
 .workflow-node-header {
   border-bottom: 1px solid #d7dde4;
   border-radius: 8px 8px 0 0;
@@ -884,6 +904,35 @@ a {
   color: #1d232a;
   font-size: 11px;
   padding: 8px 10px;
+}
+
+.workflow-node-status {
+  border-bottom: 1px solid #edf0f3;
+  color: #4b5563;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.workflow-node-status-running {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.workflow-node-status-succeeded {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.workflow-node-status-failed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.workflow-node-status-cancelled {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .workflow-run-status {

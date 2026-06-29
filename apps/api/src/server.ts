@@ -18,11 +18,15 @@ import { WorkflowService } from "./workflows/workflow-service.js";
 import { WorkflowExecutor } from "./workflows/workflow-executor.js";
 import { FakeApiFlowRuntimeAdapter } from "./apiflow/apiflow-adapter.js";
 import { ApiFlowBridge } from "./apiflow/apiflow-bridge.js";
+import { ApiFlowEventService } from "./apiflow/apiflow-event-service.js";
 import { HttpApiFlowRuntimeAdapter } from "./apiflow/apiflow-http-adapter.js";
 import { DeploymentService } from "./deployments/deployment-service.js";
 import { registerAuditRoutes } from "./routes/audit.js";
+import { registerApiFlowEventRoutes } from "./routes/apiflow-events.js";
 import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerFileRoutes } from "./routes/files.js";
+import { registerGenerationRoutes } from "./routes/generation.js";
+import { registerInternalAgentRunRoutes } from "./routes/internal-agent-runs.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerProjectRoutes } from "./routes/projects.js";
@@ -45,13 +49,15 @@ export async function createServer(config: AppConfig) {
   const previewManager = new PreviewManager(config, bus, undefined, (projectId, preview) => {
     projects.updatePreview(projectId, preview);
   });
+  const apiFlowEvents = new ApiFlowEventService(db, bus);
   const apiFlowAdapter = config.workflowRuntime === "apiflow"
     ? new FakeApiFlowRuntimeAdapter()
     : config.workflowRuntime === "apiflow-http"
       ? new HttpApiFlowRuntimeAdapter({ baseUrl: config.apiFlowSidecarUrl })
       : undefined;
-  const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter) : undefined;
+  const apiFlowBridge = apiFlowAdapter ? new ApiFlowBridge(db, bus, apiFlowAdapter, apiFlowEvents) : undefined;
   const deployments = new DeploymentService(db, config, bus, projects);
+  const workflows = new WorkflowService(db);
 
   await app.register(cors, { origin: config.webOrigin });
   await app.register(websocket);
@@ -73,9 +79,10 @@ export async function createServer(config: AppConfig) {
   });
   await registerProjectRoutes(app, projects);
   await registerTemplateRoutes(app, templates);
+  await registerGenerationRoutes(app, projects, workflows, apiFlowBridge);
   await registerWorkflowRoutes(
     app,
-    new WorkflowService(db),
+    workflows,
     new WorkflowExecutor(db, bus, runner, audit, projects),
     apiFlowAdapter,
     apiFlowBridge
@@ -84,6 +91,8 @@ export async function createServer(config: AppConfig) {
   await registerRunRoutes(app, projects, conversations, runner, bus);
   await registerFileRoutes(app, projects, files);
   await registerMessageRoutes(app, projects, conversations, runner, bus);
+  await registerApiFlowEventRoutes(app, apiFlowEvents);
+  await registerInternalAgentRunRoutes(app, projects, conversations, runner, bus);
   await registerPreviewRoutes(app, projects, previewManager);
   await registerDeployRoutes(app, projects, deployments);
   await registerWebSocketRoutes(app, bus);

@@ -100,6 +100,14 @@ export function migrate(db: Database.Database) {
       created_at text not null
     );
 
+    create table if not exists workflow_task_nodes (
+      workflow_run_id text not null references workflow_runs(id) on delete cascade,
+      task_id text not null,
+      node_id text not null,
+      created_at text not null,
+      primary key (workflow_run_id, task_id)
+    );
+
     create table if not exists deployments (
       id text primary key,
       project_id text not null references projects(id) on delete cascade,
@@ -127,6 +135,7 @@ export function migrate(db: Database.Database) {
     create index if not exists idx_workflow_runs_workflow_id on workflow_runs(workflow_id);
     create index if not exists idx_workflow_runs_project_id on workflow_runs(project_id);
     create index if not exists idx_workflow_runs_external_run_id on workflow_runs(external_run_id);
+    create index if not exists idx_workflow_task_nodes_node_id on workflow_task_nodes(node_id);
     create index if not exists idx_deployments_project_id on deployments(project_id);
   `);
 }

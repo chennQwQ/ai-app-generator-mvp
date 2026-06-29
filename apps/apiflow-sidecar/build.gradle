@@ -1,0 +1,29 @@
+plugins {
+    id "java"
+}
+
+allprojects {
+    group = "com.aigenerator"
+    version = "0.1.0"
+
+    String buildRoot = System.getenv("APIFLOW_SIDECAR_BUILD_DIR") ?: "C:/tmp/ai-app-generator-apiflow-sidecar-build"
+    String buildName = path == ":" ? "root" : path.substring(1).replace(":", "-")
+    layout.buildDirectory.set(file("${buildRoot}/${buildName}"))
+}
+
+subprojects {
+    apply plugin: "java"
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = 17
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}

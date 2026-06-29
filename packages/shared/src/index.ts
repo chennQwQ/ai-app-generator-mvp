@@ -255,6 +255,18 @@ export interface ApiFlowExternalRun {
   createdAt: string;
 }
 
+export interface ApiFlowExternalEvent {
+  sequence: number;
+  externalRunId: string;
+  type: string;
+  nodeId: string | null;
+  taskId: string | null;
+  status: string | null;
+  message: string | null;
+  at: string | null;
+  payload: Record<string, unknown>;
+}
+
 export type DeploymentStatus = "building" | "succeeded" | "failed";
 
 export interface DeploymentInfo {

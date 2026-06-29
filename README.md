@@ -12,6 +12,8 @@ Build a Web Studio where a user can describe an application, start a local code 
 
 Generator API owns intent routing, workflow construction, project state, and OpenCode orchestration. ApiFlow receives a generated workflow DSL from the API, runs it through the long-lived sidecar service, and reports run/task events back to the API so the UI can render workflow status as a graph.
 
+Current implementation status: prompt-driven workflow generation, ApiFlow sidecar run start/status polling, `/internal/agent-runs`, `/internal/apiflow-events`, sidecar event polling, and live workflow node status rendering are implemented. Remaining Phase 6 work is real ApiFlow task event emission, durable workflow event/log history, cancellation propagation, and broader node coverage.
+
 ```mermaid
 sequenceDiagram
     participant U as "User"

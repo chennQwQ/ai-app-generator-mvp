@@ -1,4 +1,4 @@
-import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
+import type { ApiFlowExportInput, ApiFlowExportResult, ApiFlowExternalEvent, ApiFlowExternalRun, ApiFlowRunInput } from "@ai-app-generator/shared";
 import type { ApiFlowRuntimeAdapter } from "./apiflow-adapter.js";
 import { ApiFlowExportValidationError, DslCompiler } from "./dsl-compiler.js";
 
@@ -10,6 +10,10 @@ export interface HttpApiFlowConfig {
 type SidecarRunResponse = Partial<ApiFlowExternalRun> & {
   runId?: string;
   externalRunId?: string;
+};
+
+type SidecarRunEvent = Partial<ApiFlowExternalEvent> & {
+  runId?: string;
 };
 
 export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
@@ -71,6 +75,23 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
     );
   }
 
+  async getEvents(externalRunId: string, afterSequence: number): Promise<ApiFlowExternalEvent[]> {
+    const response = await this.request<SidecarRunEvent[]>(
+      `/api/apiflow/runs/${encodeURIComponent(externalRunId)}/events?after=${afterSequence}`
+    );
+    return response.map((event) => ({
+      sequence: event.sequence ?? 0,
+      externalRunId: event.externalRunId ?? event.runId ?? externalRunId,
+      type: event.type ?? "event",
+      nodeId: event.nodeId ?? null,
+      taskId: event.taskId ?? readStringPayload(event.payload, "taskId"),
+      status: event.status ?? null,
+      message: event.message ?? null,
+      at: event.at ?? null,
+      payload: event.payload ?? {}
+    }));
+  }
+
   async cancelRun(externalRunId: string): Promise<void> {
     await this.request(
       `/api/apiflow/runs/${encodeURIComponent(externalRunId)}/cancel`,
@@ -80,7 +101,7 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
 
   async healthCheck(): Promise<{ ok: boolean; reason?: string }> {
     try {
-      await this.request("/api/apiflow/health");
+      await this.request("/health");
       return { ok: true };
     } catch (error) {
       return {
@@ -119,4 +140,9 @@ export class HttpApiFlowRuntimeAdapter implements ApiFlowRuntimeAdapter {
       clearTimeout(timeout);
     }
   }
+}
+
+function readStringPayload(payload: Record<string, unknown> | undefined, key: string): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

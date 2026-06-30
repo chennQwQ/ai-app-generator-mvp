@@ -127,15 +127,24 @@ export class OpenCodeAgentRunner implements AgentRunner {
       this.processes.set(request.runId, child);
 
       let settled = false;
+      let stdoutBuffer = "";
+      let sawStop = false;
+      let stopKillTimer: ReturnType<typeof setTimeout> | undefined;
       const settle = (result: AgentRunResult) => {
         if (settled) return;
         settled = true;
+        if (stopKillTimer) clearTimeout(stopKillTimer);
         this.processes.delete(request.runId);
         resolve(result);
       };
 
       child.stdout.on("data", (chunk: Buffer) => {
-        emitLog(request, "stdout", chunk.toString());
+        const text = chunk.toString();
+        emitLog(request, "stdout", text);
+        stdoutBuffer = consumeOpenCodeJsonLines(stdoutBuffer + text, () => {
+          sawStop = true;
+          stopKillTimer ??= setTimeout(() => killAgentProcess(child), 100);
+        });
       });
       child.stderr.on("data", (chunk: Buffer) => {
         emitLog(request, "stderr", chunk.toString());
@@ -145,6 +154,10 @@ export class OpenCodeAgentRunner implements AgentRunner {
         settle({ exitCode: 1, errorMessage: error.message });
       });
       child.on("close", (code) => {
+        if (sawStop) {
+          settle({ exitCode: 0, errorMessage: null });
+          return;
+        }
         const exitCode = code ?? 1;
         settle({
           exitCode,
@@ -257,6 +270,27 @@ function emitLog(request: AgentRunRequest, stream: AgentLogStream, content: stri
   }
 }
 
+function consumeOpenCodeJsonLines(buffer: string, onStop: () => void): string {
+  const lines = buffer.split(/\r?\n/);
+  const remainder = lines.pop() ?? "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    try {
+      const event = JSON.parse(trimmed) as { type?: string; part?: { reason?: string } };
+      if (event.type === "step_finish" && event.part?.reason === "stop") {
+        onStop();
+      }
+    } catch {
+      // OpenCode may write non-JSON diagnostics even in json mode; keep them as logs only.
+    }
+  }
+
+  return remainder;
+}
+
 function spawnOpenCode(
   commandName: string,
   args: string[],
@@ -268,13 +302,13 @@ function spawnOpenCode(
   if (process.platform === "win32" && isWindowsCommandShim(resolvedCommand)) {
     const nodeShimTarget = resolveWindowsNodeShimTarget(resolvedCommand);
     if (nodeShimTarget) {
-      return spawn(nodeShimTarget.command, [...nodeShimTarget.args, ...args], {
+      return closeChildStdin(spawn(nodeShimTarget.command, [...nodeShimTarget.args, ...args], {
         cwd: workspacePath,
         windowsHide: true
-      });
+      }));
     }
 
-    return spawn(
+    return closeChildStdin(spawn(
       process.env.ComSpec ?? "cmd.exe",
       ["/d", "/s", "/c", buildWindowsShimCommand(resolvedCommand, args)],
       {
@@ -282,13 +316,18 @@ function spawnOpenCode(
         windowsHide: true,
         windowsVerbatimArguments: true
       }
-    );
+    ));
   }
 
-  return spawn(resolvedCommand, args, {
+  return closeChildStdin(spawn(resolvedCommand, args, {
     cwd: workspacePath,
     windowsHide: true
-  });
+  }));
+}
+
+function closeChildStdin(child: ChildProcessWithoutNullStreams): ChildProcessWithoutNullStreams {
+  child.stdin.end();
+  return child;
 }
 
 function killAgentProcess(child: ChildProcessWithoutNullStreams): void {
@@ -368,10 +407,17 @@ function resolveWindowsNodeShimTarget(commandName: string): { command: string; a
     const match = line.match(
       /(?:^|[&|]\s*)@?(?:"?%_prog%"?|"?node(?:\.exe)?"?)\s+"([^"]+)"\s+%\*/i
     );
-    if (!match?.[1]) continue;
+    if (match?.[1]) {
+      const scriptPath = resolveWindowsShimScriptPath(match[1], path.dirname(commandName));
+      if (existsSync(scriptPath)) return { command: process.execPath, args: [scriptPath] };
+      continue;
+    }
 
-    const scriptPath = resolveWindowsShimScriptPath(match[1], path.dirname(commandName));
-    if (existsSync(scriptPath)) return { command: process.execPath, args: [scriptPath] };
+    const executableMatch = line.match(/(?:^|[&|]\s*)@?"([^"]+\.exe)"\s+%\*/i);
+    if (executableMatch?.[1]) {
+      const executablePath = resolveWindowsShimScriptPath(executableMatch[1], path.dirname(commandName));
+      if (existsSync(executablePath)) return { command: executablePath, args: [] };
+    }
   }
 
   return null;

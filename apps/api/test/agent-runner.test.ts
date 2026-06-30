@@ -88,6 +88,73 @@ describe("FakeAgentRunner", () => {
 });
 
 describe("OpenCodeAgentRunner", () => {
+  it("closes child stdin so json-mode OpenCode runs do not wait for interactive input", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-stdin-"));
+    const workspacePath = path.join(tempDir, "workspace");
+    mkdirSync(workspacePath);
+    const cliPath = path.join(tempDir, "opencode-stdin-target.cjs");
+    const recordPath = path.join(tempDir, "stdin.json");
+    writeFileSync(
+      cliPath,
+      [
+        "const fs = require('node:fs');",
+        "let input = '';",
+        "let ended = false;",
+        "process.stdin.setEncoding('utf8');",
+        "process.stdin.on('data', (chunk) => { input += chunk; });",
+        "process.stdin.on('end', () => {",
+        "  ended = true;",
+        `  fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ stdinEnded: true, input, args: process.argv.slice(2) }));`,
+        "  console.log(JSON.stringify({ type: 'step_finish', part: { reason: 'stop' } }));",
+        "});",
+        "setTimeout(() => {",
+        "  if (!ended) {",
+        `    fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ stdinEnded: false, args: process.argv.slice(2) }));`,
+        "    process.exit(7);",
+        "  }",
+        "}, 500);"
+      ].join("\n"),
+      "utf8"
+    );
+    const runner = new OpenCodeAgentRunner(
+      {
+        ...fakeConfig(tempDir),
+        agentProvider: "opencode",
+        opencodeCommand: `"${process.execPath}" "${cliPath}"`
+      },
+      new EventBus()
+    );
+    const logs: string[] = [];
+
+    const result = await runner.run({
+      projectId: "project-1",
+      runId: "run-1",
+      workspacePath,
+      prompt: "Build after stdin closes",
+      onLog: (_stream, content) => logs.push(content)
+    });
+
+    expect(result).toEqual({ exitCode: 0, errorMessage: null });
+    expect(logs.join("")).toContain("\"reason\":\"stop\"");
+    const recorded = JSON.parse(readFileSync(recordPath, "utf8")) as {
+      stdinEnded: boolean;
+      input: string;
+      args: string[];
+    };
+    expect(recorded.stdinEnded).toBe(true);
+    expect(recorded.input).toBe("");
+    expect(recorded.args).toEqual([
+      "run",
+      "--agent",
+      "build",
+      "--format",
+      "json",
+      "--dir",
+      workspacePath,
+      "Build after stdin closes"
+    ]);
+  });
+
   it.skipIf(process.platform !== "win32")("runs a Windows .cmd shim without shell-injecting the prompt", async () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "ai-generator-opencode-"));
     const workspacePath = path.join(tempDir, "workspace");

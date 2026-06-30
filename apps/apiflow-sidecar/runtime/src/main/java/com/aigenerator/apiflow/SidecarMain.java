@@ -11,6 +11,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
 public final class SidecarMain {
@@ -19,10 +20,11 @@ public final class SidecarMain {
     private SidecarMain() {
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         int port = Integer.parseInt(System.getenv().getOrDefault("APIFLOW_SIDECAR_PORT", "4317"));
         Path runtimeRoot = Path.of(System.getenv().getOrDefault("APIFLOW_RUNTIME_DIR", "build/apiflow-runtime"));
         ApiFlowRuntimeService runtime = new ApiFlowRuntimeService(runtimeRoot);
+        CountDownLatch shutdown = new CountDownLatch(1);
 
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/health", exchange -> handleHealth(exchange));
@@ -33,8 +35,10 @@ public final class SidecarMain {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             runtime.close();
             server.stop(0);
+            shutdown.countDown();
         }));
         System.out.println("apiflow-sidecar listening on http://127.0.0.1:" + port);
+        shutdown.await();
     }
 
     public static String healthJson() {
